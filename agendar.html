@@ -35,30 +35,74 @@
                 <a href="login.html" class="btn-admin-nav"><i class="fa-solid fa-right-to-bracket"></i> Login</a>
             </nav>
         </header>
+<main class="registration-container">
+    <form class="form-card" id="form-agendamento" onsubmit="handleBooking(event)">
+        <h2><i class="fa-solid fa-calendar-check"></i> Novo Agendamento</h2>
+        <p class="form-hint">Escolha o dia e veja os horários livres.</p>
 
-        <main class="registration-container">
-            <form class="form-card" onsubmit="handleBooking(event)">
-                <h2><i class="fa-solid fa-calendar-check"></i> Novo Agendamento</h2>
-                <p class="form-hint">Agenda flexível de acordo com o horário marcado.</p>
-                <div class="form-group">
-                    <label>Seu Nome</label>
-                    <input type="text" id="agendar-nome" required>
-                </div>
-                <div class="form-group">
-                    <label>Serviço</label>
-                    <select id="agendar-servico" required></select>
-                </div>
-                <div class="form-group">
-                    <label>Profissional (opcional)</label>
-                    <select id="agendar-profissional"></select>
-                </div>
-                <div class="form-group">
-                    <label>Data e Horário</label>
-                    <input type="datetime-local" id="agendar-data" required>
-                </div>
-                <button type="submit" class="btn-primary">CONFIRMAR AGENDAMENTO</button>
-            </form>
-        </main>
+        <div class="form-group">
+            <label>Seu Nome</label>
+            <input type="text" id="agendar-nome" required>
+        </div>
+        <div class="form-group">
+            <label>Seu E-mail</label>
+            <input type="email" id="agendar-email" required>
+        </div>
+        <div class="form-group">
+            <label>Serviço</label>
+            <select id="agendar-servico" required></select>
+        </div>
+        <div class="form-group">
+            <label>Profissional (opcional)</label>
+            <select id="agendar-profissional"></select>
+        </div>
+        <div class="form-group">
+            <label>Data</label>
+            <input type="date" id="agendar-data" required>
+        </div>
+        <div class="form-group">
+            <label>Horário</label>
+            <div class="slots-grid" id="agendar-horarios"></div>
+            <input type="hidden" id="agendar-horario">
+            <small class="slots-legenda">Horários riscados já estão ocupados.</small>
+        </div>
+
+        <div class="aviso-pagamento">
+            <i class="fa-solid fa-store"></i>
+            <span>O pagamento é feito <strong>presencialmente no salão</strong>, no dia do atendimento.</span>
+        </div>
+
+        <button type="submit" class="btn-primary">CONFIRMAR AGENDAMENTO</button>
+    </form>
+
+    <section class="form-card" id="confirmacao" hidden>
+        <h2><i class="fa-solid fa-circle-check"></i> Agendamento confirmado!</h2>
+        <ul class="resumo-lista">
+            <li><strong>Cliente:</strong> <span data-campo="cliente"></span></li>
+            <li><strong>Serviço:</strong> <span data-campo="servico"></span></li>
+            <li><strong>Profissional:</strong> <span data-campo="profissional"></span></li>
+            <li><strong>Data e hora:</strong> <span data-campo="data"></span></li>
+            <li><strong>Valor:</strong> <span data-campo="valor"></span></li>
+        </ul>
+
+        <div class="aviso-pagamento">
+            <i class="fa-solid fa-store"></i>
+            <span>Lembrete: o pagamento é feito <strong>presencialmente no salão</strong>.</span>
+        </div>
+
+        <div class="email-simulado">
+            <p class="email-simulado-topo"><i class="fa-solid fa-envelope"></i> E-mail de confirmação (simulação)</p>
+            <p><strong>Para:</strong> <span data-campo="email"></span></p>
+            <p><strong>Assunto:</strong> Agendamento confirmado - Studio Nay Lopes</p>
+            <p>Olá, <span data-campo="cliente"></span>! Seu horário de <span data-campo="servico"></span>
+               com <span data-campo="profissional"></span> está reservado para <span data-campo="data"></span>.</p>
+            <p>Valor a pagar no salão: <span data-campo="valor"></span>.</p>
+        </div>
+
+        <button type="button" class="btn-primary" onclick="novoAgendamento()">NOVO AGENDAMENTO</button>
+    </section>
+</main>
+        
         <footer>© 2026 Studio Nay Lopes</footer>
     </div>
     <script src="script.js"></script>

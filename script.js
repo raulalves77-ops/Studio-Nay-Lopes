@@ -9,6 +9,114 @@ function salvarAgendamentos() {
     localStorage.setItem('dbAgendamentos', JSON.stringify(dbAgendamentos));
 }
 
+// HORÁRIOS DE ATENDIMENTO (um atendimento por hora cheia)
+const HORARIOS = ['09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00'];
+
+// Lê de novo o localStorage, para pegar agendamentos feitos em outra aba
+function recarregarAgendamentos() {
+    dbAgendamentos = JSON.parse(localStorage.getItem('dbAgendamentos')) || dbAgendamentos;
+}
+
+// Nomes dos profissionais cadastrados (se não tiver nenhum, usa um padrão)
+function nomesProfissionais() {
+    const nomes = dbProfissionais.map(p => p.nome);
+    return nomes.length > 0 ? nomes : ['Equipe Studio'];
+}
+
+// Esse profissional já tem agendamento nesse dia e hora?
+function horarioOcupado(dataISO, hora, profissional) {
+    return dbAgendamentos.some(ag =>
+        ag.dataISO === dataISO && ag.hora === hora && ag.profissional === profissional
+    );
+}
+
+// Quais profissionais estão livres nesse dia e hora?
+function profissionaisLivres(dataISO, hora) {
+    return nomesProfissionais().filter(nome => !horarioOcupado(dataISO, hora, nome));
+}
+
+// O horário pode ser escolhido? (RF06: impede choque de horários)
+function horarioDisponivel(dataISO, hora, profissional) {
+    // não deixa marcar horário que já passou
+    if (new Date(`${dataISO}T${hora}:00`) <= new Date()) return false;
+
+    if (profissional) {
+        return !horarioOcupado(dataISO, hora, profissional);
+    }
+    // "Qualquer profissional": serve se pelo menos um estiver livre
+    return profissionaisLivres(dataISO, hora).length > 0;
+}
+
+// Data de hoje no formato AAAA-MM-DD (o formato do input type="date")
+function hojeISO() {
+    const d = new Date();
+    const mes = String(d.getMonth() + 1).padStart(2, '0');
+    const dia = String(d.getDate()).padStart(2, '0');
+    return `${d.getFullYear()}-${mes}-${dia}`;
+}
+
+// DESENHA OS BOTÕES DE HORÁRIO (os ocupados ficam desabilitados)
+function renderizarHorarios() {
+    recarregarAgendamentos();
+
+    const dataISO = document.getElementById('agendar-data').value;
+    const profissional = document.getElementById('agendar-profissional').value;
+    const grade = document.getElementById('agendar-horarios');
+
+    document.getElementById('agendar-horario').value = ''; // limpa a escolha anterior
+
+    if (!dataISO) {
+        grade.innerHTML = '<p class="slots-msg">Escolha uma data para ver os horários.</p>';
+        return;
+    }
+
+    grade.innerHTML = HORARIOS.map(hora => {
+        const livre = horarioDisponivel(dataISO, hora, profissional);
+        return `<button type="button" class="slot-btn" data-hora="${hora}" ${livre ? '' : 'disabled'}>${hora}</button>`;
+    }).join('');
+}
+
+// PREPARA A PÁGINA DE AGENDAR
+function initAgendamento() {
+    const inputData = document.getElementById('agendar-data');
+    const selProf = document.getElementById('agendar-profissional');
+    const selServico = document.getElementById('agendar-servico');
+    const grade = document.getElementById('agendar-horarios');
+    if (!inputData || !grade) return;
+
+    // não deixa escolher dias passados
+    inputData.min = hojeISO();
+
+    // serviço escolhido na página de serviços (agendar.html?servico=Luzes)
+    const servicoURL = new URLSearchParams(window.location.search).get('servico');
+    if (servicoURL) selServico.value = servicoURL;
+
+    // se a pessoa está logada, já preenche nome e e-mail
+    const sessao = JSON.parse(localStorage.getItem('studio_session'));
+    if (sessao) {
+        document.getElementById('agendar-nome').value = sessao.nome;
+        const usuarios = JSON.parse(localStorage.getItem('studio_users')) || [];
+        const usuario = usuarios.find(u => u.id === sessao.userId);
+        if (usuario) document.getElementById('agendar-email').value = usuario.email;
+    }
+
+    // redesenha os horários quando muda a data ou o profissional
+    inputData.addEventListener('change', renderizarHorarios);
+    selProf.addEventListener('change', renderizarHorarios);
+
+    // clique em um horário: marca ele e guarda no campo escondido
+    grade.addEventListener('click', event => {
+        const botao = event.target.closest('.slot-btn');
+        if (!botao || botao.disabled) return;
+
+        grade.querySelectorAll('.slot-btn').forEach(b => b.classList.remove('selected'));
+        botao.classList.add('selected');
+        document.getElementById('agendar-horario').value = botao.dataset.hora;
+    });
+
+    renderizarHorarios();
+}
+
 /* ============================================================
    ALTERNÂNCIA DE TEMA (LIGHT / DARK MODE)
    - Preferência salva no localStorage ('sbd-theme')
@@ -55,7 +163,7 @@ function initTheme() {
 }
 
 /* ============================================================
-   MENU MOBILE (HAMBÚRGUER)
+   MENU MOBILE
    ============================================================ */
 function initMobileNav() {
     const toggle = document.querySelector('.nav-toggle');
@@ -106,7 +214,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (document.getElementById('agendar-profissional')) {
         popularSelectsAgendamento();
+        initAgendamento();
     }
+    initServicosPage();
+
     const listaProfs = document.getElementById('lista-profissionais');
     if (listaProfs) {
         dbProfissionais.forEach(p => {
@@ -191,24 +302,79 @@ function popularSelectsAgendamento() {
 // CRIAR AGENDAMENTO
 function handleBooking(event) {
     event.preventDefault();
+    recarregarAgendamentos();
 
+    const nome = document.getElementById('agendar-nome').value.trim();
+    const email = document.getElementById('agendar-email').value.trim();
     const servicoSel = document.getElementById('agendar-servico');
     const servico = SERVICOS.find(s => s.nome === servicoSel.value);
-    const dataHora = document.getElementById('agendar-data').value;
+    const dataISO = document.getElementById('agendar-data').value;
+    const hora = document.getElementById('agendar-horario').value;
+    let profissional = document.getElementById('agendar-profissional').value;
+
+    if (!hora) {
+        alert('Escolha um horário disponível.');
+        return;
+    }
+
+    // RF06: confere DE NOVO antes de salvar (outra pessoa pode ter reservado agora)
+    if (!horarioDisponivel(dataISO, hora, profissional)) {
+        alert('Esse horário acabou de ser ocupado. Escolha outro.');
+        renderizarHorarios();
+        return;
+    }
+
+    // "Qualquer profissional": fica com o primeiro que estiver livre
+    if (!profissional) {
+        profissional = profissionaisLivres(dataISO, hora)[0];
+    }
+
+    const [ano, mes, dia] = dataISO.split('-');
+    const sessao = JSON.parse(localStorage.getItem('studio_session'));
 
     const ag = {
         id: Date.now().toString().slice(-6),
-        cliente: document.getElementById('agendar-nome').value,
+        clienteId: sessao ? sessao.userId : null,
+        cliente: nome,
+        email: email,
         servico: servicoSel.value,
-        data: dataHora ? new Date(dataHora).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '',
+        profissional: profissional,
+        dataISO: dataISO,                       // usado para checar choque
+        hora: hora,                             // usado para checar choque
+        data: `${dia}/${mes}/${ano} - ${hora}`, // usado para mostrar (painel admin)
         valor: servico ? servico.valor : 0,
         status: "Pendente"
     };
 
     dbAgendamentos.push(ag);
     salvarAgendamentos();
-    alert(`✨ Agendamento confirmado para ${ag.data}!\nServiço: ${ag.servico} — R$ ${ag.valor.toFixed(2)}`);
-    event.target.reset();
+    mostrarConfirmacao(ag);
+}
+
+// MOSTRA A CONFIRMAÇÃO + E-MAIL SIMULADO (RF07 e RF13)
+function mostrarConfirmacao(ag) {
+    const dados = {
+        ...ag,
+        valor: 'R$ ' + Number(ag.valor).toFixed(2).replace('.', ',')
+    };
+
+    document.querySelectorAll('#confirmacao [data-campo]').forEach(el => {
+        el.textContent = dados[el.dataset.campo];
+    });
+
+    console.log(`E-mail simulado enviado para ${ag.email}: agendamento de ${ag.servico} em ${ag.data}`);
+
+    document.getElementById('form-agendamento').hidden = true;
+    document.getElementById('confirmacao').hidden = false;
+}
+
+// VOLTAR PARA O FORMULÁRIO
+function novoAgendamento() {
+    const form = document.getElementById('form-agendamento');
+    form.reset();
+    form.hidden = false;
+    document.getElementById('confirmacao').hidden = true;
+    renderizarHorarios();
 }
 
 // LOGIN SIMPLES (cliente cadastrado ou admin fixo)
@@ -218,17 +384,17 @@ function handleLogin(event) {
     const senha = document.getElementById('login-senha').value;
 
     if (email === 'admin@studio.com' && senha === 'admin123') {
-        alert('🔓 Login de administrador realizado!');
+        alert('Login de administrador realizado!');
         window.location.href = 'admin.html';
         return;
     }
 
     const cliente = dbClientes.find(c => c.email === email && c.senha === senha);
     if (cliente) {
-        alert(`💖 Bem-vinda, ${cliente.nome}!`);
+        alert(`Bem-vinda, ${cliente.nome}!`);
         window.location.href = 'index.html';
     } else {
-        alert('❌ E-mail ou senha incorretos.');
+        alert('E-mail ou senha incorretos.');
     }
 }
 
@@ -396,7 +562,7 @@ document.addEventListener('DOMContentLoaded', () => {
         senhaInput.addEventListener('input', () => {
             const val = senhaInput.value;
             let strength = 0;
-            
+
             // Critérios de pontuação:
             if (val.length >= 8) strength += 1; // Pelo menos 8 caracteres
             if (val.match(/(?=.*[a-z])(?=.*[A-Z])/)) strength += 1; // Maiúscula e Minúscula
@@ -423,9 +589,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 strengthText.classList.add('text-strong');
                 strengthText.textContent = 'Força: Forte';
             }
-            
+
             // Revalida se as senhas batem ao alterar a primeira senha
-            if(confirmaSenhaInput) checkMatch();
+            if (confirmaSenhaInput) checkMatch();
         });
     }
 
@@ -455,12 +621,12 @@ document.addEventListener('DOMContentLoaded', () => {
 // 1. Inicializar a base de dados fictícia de utilizadores se não existir
 if (!localStorage.getItem('studio_users')) {
     const defaultUsers = [
-        { 
-            id: 1, 
-            nome: 'Admin Studio', 
-            email: 'admin@studio.com', 
-            senha: 'admin123', 
-            tipo: 'admin' 
+        {
+            id: 1,
+            nome: 'Admin Studio',
+            email: 'admin@studio.com',
+            senha: 'admin123',
+            tipo: 'admin'
         }
     ];
     localStorage.setItem('studio_users', JSON.stringify(defaultUsers));
@@ -542,7 +708,7 @@ function handleLogin(event) {
 function handleRecuperarSenha(event) {
     event.preventDefault();
     const email = document.getElementById('recuperar-email').value;
-    
+
     // Simulação visual para o utilizador
     alert(`Se o e-mail '${email}' estiver registado, receberá as instruções em breve.`);
     window.location.href = 'login.html';
@@ -577,7 +743,7 @@ document.addEventListener('DOMContentLoaded', () => {
             loginLink.style.backgroundColor = 'transparent';
             loginLink.style.border = '1px solid var(--accent-marsala)';
             loginLink.style.color = 'var(--accent-marsala)';
-            
+
             // Adicionar evento de logout
             loginLink.addEventListener('click', (e) => {
                 e.preventDefault();
@@ -595,3 +761,17 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 });
+
+// BOTÃO "AGENDAR" EM CADA SERVIÇO (página servicos.html)
+function initServicosPage() {
+    document.querySelectorAll('.service-card--icon').forEach(card => {
+        const nome = card.querySelector('h3').textContent;
+
+        const link = document.createElement('a');
+        link.href = 'agendar.html?servico=' + encodeURIComponent(nome);
+        link.className = 'btn-primary btn-small';
+        link.textContent = 'AGENDAR';
+
+        card.appendChild(link);
+    });
+}

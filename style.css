@@ -959,3 +959,107 @@ footer {
 /* Validação de senhas iguais */
 .match-yes { color: #81c784; }
 .match-no { color: #e57373; }
+
+
+/* ===== AGENDAMENTO editado ===== */
+[hidden] {
+    display: none !important;
+}
+
+.slots-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(78px, 1fr));
+    gap: 8px;
+}
+
+.slot-btn {
+    padding: 10px 6px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--bg-main);
+    color: var(--text-primary);
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.slot-btn:hover:not(:disabled) {
+    border-color: var(--accent-marsala);
+    color: var(--accent-marsala);
+}
+
+.slot-btn.selected {
+    background: var(--accent-marsala);
+    border-color: var(--accent-marsala);
+    color: #fff;
+}
+
+.slot-btn:disabled {
+    opacity: 0.45;
+    text-decoration: line-through;
+    cursor: not-allowed;
+}
+
+.slots-msg {
+    grid-column: 1 / -1;
+    color: var(--text-secondary);
+    font-size: 14px;
+}
+
+.slots-legenda {
+    display: block;
+    margin-top: 8px;
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+
+.aviso-pagamento {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 16px;
+    padding: 12px 14px;
+    background: var(--accent-beige);
+    border-left: 4px solid var(--accent-marsala);
+    border-radius: 8px;
+    font-size: 14px;
+}
+
+.aviso-pagamento i {
+    margin-top: 3px;
+    color: var(--accent-marsala);
+}
+
+.resumo-lista {
+    list-style: none;
+    margin-bottom: 16px;
+}
+
+.resumo-lista li {
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.email-simulado {
+    margin-bottom: 20px;
+    padding: 16px;
+    border: 1px dashed var(--accent-marsala);
+    border-radius: var(--radius);
+    background: var(--bg-main);
+    font-size: 14px;
+}
+
+.email-simulado p {
+    margin-bottom: 8px;
+}
+
+.email-simulado-topo {
+    color: var(--accent-marsala);
+    font-weight: 700;
+}
+
+.btn-small {
+    padding: 8px 18px;
+    margin-top: 12px;
+    font-size: 12px;
+}
