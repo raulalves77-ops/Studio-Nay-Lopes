@@ -7,35 +7,27 @@
 }
 
 :root {
-    color-scheme: light;
     --bg-main: #fdf6f3;
     --card-bg: #ffffff;
     --text-primary: #4a3b3b;
     --text-secondary: #8a7373;
     --accent-marsala: #a5585e;
     --accent-marsala-dark: #8c454b;
-    --accent-rose: #d497a0;
-    --accent-rose-soft: #f8ecec;
     --accent-beige: #eadbd1;
     --border-color: #efdcd6;
     --radius: 14px;
     --shadow-soft: 0 8px 24px rgba(165, 88, 94, 0.10);
     --transition: all 0.25s ease;
-    --font-display: 'Playfair Display', Georgia, serif;
-    --font-body: 'Poppins', 'Segoe UI', Tahoma, sans-serif;
 }
 
 /* ===== TEMA ESCURO ===== */
 html[data-theme="dark"] {
-    color-scheme: dark;
     --bg-main: #21191b;
     --card-bg: #302326;
     --text-primary: #f6e9e7;
     --text-secondary: #c3a9aa;
     --accent-marsala: #d18b91;
     --accent-marsala-dark: #b66b73;
-    --accent-rose: #e0a8b0;
-    --accent-rose-soft: #463134;
     --accent-beige: #493438;
     --border-color: #51383d;
     --shadow-soft: 0 8px 24px rgba(0, 0, 0, 0.20);
@@ -48,18 +40,11 @@ html {
 
 body {
     min-height: 100vh;
-    font-family: var(--font-body);
+    font-family: 'Segoe UI', Tahoma, sans-serif;
     background: var(--bg-main);
     color: var(--text-primary);
     line-height: 1.5;
     transition: background 0.25s ease, color 0.25s ease;
-}
-
-h1,
-h2,
-h3,
-.logo-text {
-    font-family: var(--font-display);
 }
 
 img,
@@ -136,8 +121,8 @@ button {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 44px;
-    height: 44px;
+    width: 42px;
+    height: 42px;
     border: 1px solid var(--border-color);
     border-radius: 50%;
     background: var(--bg-main);
@@ -187,26 +172,6 @@ button {
     background: var(--accent-marsala-dark);
 }
 
-/* ===== SKIP LINK (acessibilidade) ===== */
-.skip-link {
-    position: absolute;
-    left: -9999px;
-    top: 0;
-    z-index: 100000;
-    background: var(--accent-marsala);
-    color: #fff;
-    padding: 10px 18px;
-    border-radius: 0 0 12px 0;
-    font-weight: 600;
-    text-decoration: none;
-}
-
-.skip-link:focus {
-    left: 0;
-    outline: 3px solid var(--accent-rose);
-    outline-offset: 2px;
-}
-
 /* ===== HERO ===== */
 .hero-card {
     display: flex;
@@ -232,11 +197,7 @@ button {
 }
 
 .hero-highlight {
-    background: linear-gradient(120deg, var(--accent-marsala), var(--accent-rose));
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
-    -webkit-text-fill-color: transparent;
+    color: var(--accent-marsala);
 }
 
 .hero-subtitle {
@@ -267,7 +228,7 @@ button {
 /* ===== BOTÕES ===== */
 .btn-primary {
     display: inline-block;
-    background: linear-gradient(135deg, var(--accent-marsala), var(--accent-rose));
+    background: var(--accent-marsala);
     color: #fff;
     text-decoration: none;
     border: none;
@@ -281,7 +242,7 @@ button {
 }
 
 .btn-primary:hover {
-    background: linear-gradient(135deg, var(--accent-marsala-dark), var(--accent-marsala));
+    background: var(--accent-marsala-dark);
     transform: translateY(-2px);
 }
 
@@ -321,7 +282,6 @@ button {
 
 .service-card:hover {
     transform: translateY(-4px);
-    border-color: var(--accent-rose);
     box-shadow: var(--shadow-soft);
 }
 
@@ -337,7 +297,7 @@ button {
     height: 84px;
     margin-bottom: 14px;
     border-radius: 50%;
-    background: var(--accent-rose-soft);
+    background: #f7e9e9;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -355,52 +315,8 @@ button {
     object-fit: contain;
 }
 
-/* ===== CARDS COM PAINEL DE MÍDIA (foto do serviço) ===== */
-.service-card--media {
-    padding: 0;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-}
-
-.service-media {
-    position: relative;
-    width: 100%;
-    aspect-ratio: 4 / 5;
-    background: var(--accent-rose-soft);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    overflow: hidden;
-}
-
-.service-media > img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
-}
-
-.service-media .service-icon {
-    margin-bottom: 0;
-    width: 96px;
-    height: 96px;
-}
-
-.service-media .service-icon img {
-    width: 72px;
-    height: 72px;
-}
-
-.service-body {
-    padding: 18px 22px 22px;
-    display: flex;
-    flex-direction: column;
-    flex: 1;
-}
-
-.service-body p {
-    flex: 1;
+[data-theme="dark"] .service-icon {
+    background: #43302f;
 }
 
 .service-card h3 {
@@ -417,25 +333,6 @@ button {
     margin-top: 10px;
     font-weight: bold;
     color: var(--accent-marsala);
-}
-
-/* ===== SEÇÃO "NOSSOS TRABALHOS" (mosaico na página de serviços) ===== */
-.works-section {
-    margin-top: 44px;
-}
-
-.works-section h2 {
-    color: var(--accent-marsala);
-    margin-bottom: 6px;
-}
-
-.works-section > p {
-    color: var(--text-secondary);
-    margin-bottom: 22px;
-}
-
-.works-section .btn-primary {
-    margin-top: 22px;
 }
 
 /* ===== GALERIA: MINIATURAS PADRONIZADAS ===== */
@@ -638,10 +535,6 @@ button {
     font-weight: bold;
     color: var(--text-primary);
     transition: var(--transition);
-}
-
-.tab-btn:hover {
-    border-color: var(--accent-rose);
 }
 
 .tab-btn.active {
@@ -857,7 +750,7 @@ footer {
 }
 
 /* ===== RESPONSIVIDADE: MENU MOBILE ===== */
-@media (max-width: 900px) {
+@media (max-width: 820px) {
     .navbar {
         gap: 12px;
         padding: 14px 16px;
@@ -888,7 +781,7 @@ footer {
     .nav-links a {
         display: block;
         width: 100%;
-        padding: 14px 10px;
+        padding: 12px 8px;
     }
 
     .nav-links .btn-admin-nav {
