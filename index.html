@@ -3,21 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#fdf6f3" id="meta-theme-color">
     <title>Studio Nay Lopes - Home</title>
     <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script>
-        /* Aplica o tema salvo antes da renderização (evita piscar de tema) */
         (function () {
             try {
-                var t = localStorage.getItem('sbd-theme');
-                if (!t && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) t = 'dark';
-                if (t) document.documentElement.setAttribute('data-theme', t);
+                var theme = localStorage.getItem('sbd-theme');
+                if (!theme && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) theme = 'dark';
+                if (theme === 'light' || theme === 'dark') document.documentElement.setAttribute('data-theme', theme);
             } catch (e) {}
         })();
     </script>
 </head>
 <body>
+    <a href="#conteudo" class="skip-link">Pular para o conteúdo</a>
     <div class="main-wrapper">
         <header class="navbar">
             <div class="logo"><i class="fa-solid fa-spa logo-icon"></i><div class="logo-text"><span>Studio</span><strong>Nay Lopes</strong></div></div>
@@ -37,7 +41,7 @@
             </nav>
         </header>
 
-        <main class="hero-card">
+        <main id="conteudo" class="hero-card">
             <div class="hero-content">
                 <h1>Realce sua<br><span class="hero-highlight">Beleza Natural ✨</span></h1>
                 <p class="hero-subtitle">Luzes, Progressiva, Escova & Cílios com Cuidado Único</p>

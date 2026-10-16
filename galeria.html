@@ -4,6 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#fdf6f3" id="meta-theme-color">
 
     <title>Galeria - Studio Nay Lopes</title>
 
@@ -26,167 +27,16 @@
         })();
     </script>
 
-    <link rel="stylesheet"
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet"
           href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
-    <style>
-        /* Galeria: miniaturas padronizadas */
-        .gallery-grid {
-            display: grid;
-            grid-template-columns: repeat(4, minmax(0, 1fr));
-            gap: 16px;
-            align-items: start;
-        }
-
-        .gallery-grid .gallery-item {
-            position: relative;
-            display: block;
-            width: 100%;
-            height: 200px;
-            min-width: 0;
-            padding: 0;
-            margin: 0;
-            overflow: hidden;
-            border: none;
-            border-radius: var(--radius, 12px);
-            background: var(--accent-beige, #eadbd1);
-            cursor: pointer;
-            box-shadow: var(--shadow-soft, 0 3px 10px #00000015);
-            color: inherit;
-            font: inherit;
-            text-align: inherit;
-        }
-
-        .gallery-grid .gallery-item img,
-        .gallery-grid .gallery-item video {
-            display: block;
-            width: 100%;
-            height: 100%;
-            max-width: none;
-            object-fit: cover;
-            border-radius: inherit;
-        }
-
-        .gallery-grid .gallery-zoom {
-            position: absolute;
-            inset: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            padding: 8px;
-            color: white;
-            background: rgba(50, 20, 30, 0.4);
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 0.2s ease;
-        }
-
-        .gallery-grid .gallery-item:hover .gallery-zoom,
-        .gallery-grid .gallery-item:focus-visible .gallery-zoom {
-            opacity: 1;
-        }
-
-        .gallery-grid .gallery-video .gallery-zoom {
-            inset: auto 0 0;
-            min-height: 42px;
-            opacity: 1;
-            background: rgba(50, 20, 30, 0.78);
-        }
-
-        .gallery-grid .gallery-item:focus-visible {
-            outline: 3px solid #a9787d;
-            outline-offset: 3px;
-        }
-
-        /* Visualizador ampliado */
-        .media-lightbox[aria-hidden="true"] {
-            display: none !important;
-        }
-
-        .media-lightbox {
-            position: fixed;
-            inset: 0;
-            z-index: 99999;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            gap: 12px;
-            padding: 55px 20px 20px;
-            background: rgba(15, 10, 12, 0.93);
-        }
-
-        .media-lightbox-content {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 100%;
-            height: 78vh;
-            min-height: 0;
-        }
-
-        .media-lightbox-content img,
-        .media-lightbox-content video {
-            display: block;
-            width: auto;
-            height: auto;
-            max-width: 90vw;
-            max-height: 75vh;
-            object-fit: contain;
-            border-radius: 8px;
-        }
-
-        .media-lightbox-content video {
-            background: #000;
-        }
-
-        .media-lightbox-close {
-            position: absolute;
-            top: 12px;
-            right: 20px;
-            z-index: 2;
-            width: 44px;
-            height: 44px;
-            border: none;
-            border-radius: 50%;
-            background: #fff;
-            color: #4a2c31;
-            font-size: 30px;
-            cursor: pointer;
-        }
-
-        .media-lightbox-caption {
-            max-width: 90vw;
-            margin: 0;
-            color: #fff;
-            text-align: center;
-        }
-
-        @media (max-width: 900px) {
-            .gallery-grid {
-                grid-template-columns: repeat(3, minmax(0, 1fr));
-            }
-        }
-
-        @media (max-width: 600px) {
-            .gallery-grid {
-                grid-template-columns: repeat(2, minmax(0, 1fr));
-                gap: 12px;
-            }
-
-            .gallery-grid .gallery-item {
-                height: 160px;
-            }
-
-            .media-lightbox-content {
-                height: 75vh;
-            }
-        }
-    </style>
 </head>
 
 <body>
+    <a href="#conteudo" class="skip-link">Pular para o conteúdo</a>
     <div class="main-wrapper">
 
         <header class="navbar">
@@ -235,7 +85,7 @@
             </nav>
         </header>
 
-        <main class="page-card">
+        <main id="conteudo" class="page-card">
             <h1>
                 <i class="fa-solid fa-images"></i>
                 Galeria
@@ -387,94 +237,5 @@
 
     <script src="./script.js"></script>
 
-    <!-- Funcionalidade da lupa e do visualizador -->
-    <script>
-        (function () {
-            function iniciarGaleria() {
-                const lightbox = document.getElementById('media-lightbox');
-                const content = document.getElementById('media-lightbox-content');
-                const caption = document.getElementById('media-lightbox-caption');
-                const botaoFechar = document.querySelector('.media-lightbox-close');
-
-                if (!lightbox || !content || !caption || !botaoFechar) return;
-                if (lightbox.dataset.initialized === 'true') return;
-
-                lightbox.dataset.initialized = 'true';
-
-                function fechar() {
-                    content.querySelectorAll('video').forEach(video => {
-                        video.pause();
-                        video.removeAttribute('src');
-                        video.load();
-                    });
-
-                    content.replaceChildren();
-                    caption.textContent = '';
-                    lightbox.setAttribute('aria-hidden', 'true');
-                    document.body.style.overflow = '';
-                }
-
-                document.querySelectorAll('.gallery-item').forEach(item => {
-                    item.addEventListener('click', () => {
-                        content.replaceChildren();
-
-                        const imagem = item.querySelector('img');
-                        const videoOriginal = item.querySelector('video');
-                        const caminhoVideo = item.dataset.videoSrc;
-
-                        if (caminhoVideo || videoOriginal) {
-                            const video = document.createElement('video');
-
-                            video.src = caminhoVideo ||
-                                videoOriginal.currentSrc ||
-                                videoOriginal.src;
-
-                            video.controls = true;
-                            video.playsInline = true;
-                            video.preload = 'metadata';
-
-                            content.appendChild(video);
-                        } else if (imagem) {
-                            const ampliada = document.createElement('img');
-
-                            ampliada.src = imagem.currentSrc || imagem.src;
-                            ampliada.alt = imagem.alt || 'Imagem ampliada';
-
-                            content.appendChild(ampliada);
-                        } else {
-                            return;
-                        }
-
-                        caption.textContent = item.dataset.caption ||
-                            (imagem ? imagem.alt : 'Vídeo promocional');
-
-                        lightbox.setAttribute('aria-hidden', 'false');
-                        document.body.style.overflow = 'hidden';
-                    });
-                });
-
-                botaoFechar.addEventListener('click', fechar);
-
-                lightbox.addEventListener('click', event => {
-                    if (event.target === lightbox) fechar();
-                });
-
-                document.addEventListener('keydown', event => {
-                    if (
-                        event.key === 'Escape' &&
-                        lightbox.getAttribute('aria-hidden') === 'false'
-                    ) {
-                        fechar();
-                    }
-                });
-            }
-
-            if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', iniciarGaleria);
-            } else {
-                iniciarGaleria();
-            }
-        })();
-    </script>
 </body>
 </html>

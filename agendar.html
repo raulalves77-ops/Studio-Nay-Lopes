@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#fdf6f3" id="meta-theme-color">
     <title>Agendar - Studio Nay Lopes</title>
     <link rel="stylesheet" href="style.css">
     <script>
@@ -14,9 +15,13 @@
             } catch (e) {}
         })();
     </script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
+    <a href="#conteudo" class="skip-link">Pular para o conteúdo</a>
     <div class="main-wrapper">
         <header class="navbar">
             <div class="logo"><i class="fa-solid fa-spa logo-icon"></i><div class="logo-text"><span>Studio</span><strong>Nay Lopes</strong></div></div>
@@ -36,7 +41,7 @@
             </nav>
         </header>
 
-        <main class="registration-container">
+        <main id="conteudo" class="registration-container">
             <form class="form-card" onsubmit="handleBooking(event)">
                 <h2><i class="fa-solid fa-calendar-check"></i> Novo Agendamento</h2>
                 <p class="form-hint">Agenda flexível de acordo com o horário marcado.</p>
