@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
@@ -31,43 +31,53 @@
                 <a href="galeria.html">Galeria</a>
                 <a href="contato.html">Contato</a>
                 <a href="agendar.html">Agendar</a>
+                <a href="meus-agendamentos.html">Meus Agendamentos</a>
+                <a href="minha-conta.html">Minha Conta</a>
                 <a href="cadastro.html">Cadastre-se</a>
                 <a href="login.html" class="active btn-admin-nav"><i class="fa-solid fa-right-to-bracket"></i> Login</a>
             </nav>
         </header>
 
         <main class="registration-container">
-            <form class="form-card" id="form-login" onsubmit="handleLogin(event)">
-                <h2 style="text-align: center;"><i class="fa-solid fa-lock"></i> Acessar Conta</h2>
-                
-                <div class="form-group">
-                    <label>E-mail</label>
-                    <input type="email" id="login-email" required>
-                </div>
-                <div class="form-group">
-                    <label>Senha</label>
-                    <input type="password" id="login-senha" required>
-                </div>
+            <!--
+                IMPORTANTE: os dois formularios sao IRMAOS (nivelais dentro do .form-card).
+                Formularios aninhados sao HTML invalido: o parser do navegador ignora a tag
+                <form> interna, fazendo o campo "recuperar-email" (required) passar a fazer
+                parte do formulario de login e a bloquear o submit com "campo obrigatorio".
+            -->
+            <div class="form-card">
+                <form id="login-form" onsubmit="handleLogin(event)">
+                    <h2><i class="fa-solid fa-lock"></i> Acessar Conta</h2>
+                    <div class="form-group">
+                        <label for="login-email">E-mail</label>
+                        <input type="email" id="login-email" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="login-senha">Senha</label>
+                        <input type="password" id="login-senha" required>
+                    </div>
+                    <button type="submit" class="btn-primary">ENTRAR</button>
+                    <p style="margin-top:14px; color: var(--text-secondary); font-size:13px;">
+                        Clientes: use o e-mail e a senha do seu cadastro.<br>
+                        Administração: entre com as credenciais fornecidas.
+                    </p>
+                </form>
 
-                <!-- NOVO: Ligação de Recuperação de Senha -->
-                <div style="text-align: right; margin-top: -10px; margin-bottom: 20px;">
-                    <a href="recuperar-senha.html" style="font-size: 13px; color: var(--accent-marsala); text-decoration: none; font-weight: 600;">Esqueceu a senha?</a>
-                </div>
-                
-                <button type="submit" class="btn-primary" style="width: 100%;">ENTRAR</button>
-                
-                <!-- NOVO: Ligação para Cadastro -->
-                <div style="text-align: center; margin-top: 20px; font-size: 14px; color: var(--text-secondary);">
-                    Ainda não tem conta? <a href="cadastro.html" style="color: var(--accent-marsala); font-weight: 600; text-decoration: none;">Cadastre-se aqui</a>
-                </div>
+                <!-- RF03 - Recuperacao de senha -->
+                <hr style="border:none; border-top:1px solid var(--border-color); margin: 22px 0;">
 
-                <p style="margin-top:20px; color: var(--text-secondary); font-size:13px; text-align: center;">
-                    Admin: admin@studio.com / admin123 — ou use o e-mail e senha do seu cadastro.
-                </p>
-            </form>
+                <form id="recuperar-senha-form" onsubmit="solicitarRecuperacaoSenha(event)">
+                    <h2 style="font-size:15px;"><i class="fa-solid fa-key"></i> Esqueci minha senha</h2>
+                    <div class="form-group">
+                        <label for="recuperar-email">E-mail cadastrado</label>
+                        <input type="email" id="recuperar-email" placeholder="voce@email.com" required>
+                    </div>
+                    <button type="submit" class="btn-outline">RECUPERAR SENHA</button>
+                </form>
+            </div>
         </main>
         <footer>© 2026 Studio Nay Lopes</footer>
     </div>
-    <script src="script.js"></script>
+    <script src="script.js?v=2"></script>
 </body>
 </html>

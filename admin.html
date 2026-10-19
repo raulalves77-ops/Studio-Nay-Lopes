@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
@@ -17,7 +17,6 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
-    <!-- A main-wrapper envolve TUDO para manter a largura máxima e centrar -->
     <div class="main-wrapper">
         <header class="navbar">
             <div class="logo"><i class="fa-solid fa-spa logo-icon"></i><div class="logo-text"><span>Painel</span><strong>Administrativo</strong></div></div>
@@ -27,12 +26,11 @@
             </div>
             <nav class="nav-links" id="site-navigation" aria-label="Navegação principal">
                 <a href="index.html"><i class="fa-solid fa-arrow-left"></i> Voltar ao Site</a>
+                <a href="#" onclick="handleLogout(); return false;"><i class="fa-solid fa-right-from-bracket"></i> Sair</a>
             </nav>
         </header>
 
-        <!-- Adicionado o gap: 20px para separar os blocos verticalmente -->
-        <main class="admin-dashboard" style="gap: 20px;">
-            
+        <main class="admin-dashboard">
             <!-- Métricas -->
             <div class="metrics-grid">
                 <div class="metric-card">
@@ -53,14 +51,14 @@
                  <i class="fa-solid fa-chart-pie metric-icon"></i>
                  <div>
                  <h3>Taxa de Ocupação</h3>
-                 <p id="occupancy-rate">85%</p> <!-- Requisito RF12 -->
+                 <p id="occupancy-rate">0%</p> <!-- Métrica de ocupação (UC15) -->
+                 </div>
                  </div>
                 </div>
-            </div> <!-- Aqui terminam os cartões. A div extra que quebrava o site foi removida daqui! -->
+            </div>
 
             <!-- Tabela de Clientes e Profissionais Registrados -->
-            <!-- Margens removidas pois o 'gap' no main já resolve o espaçamento -->
-            <div class="db-card">
+            <div class="db-card" style="margin-top: 24px;">
                 <h3><i class="fa-solid fa-users-gear"></i> Profissionais & Clientes Registrados</h3>
                 <div class="table-responsive">
                     <table>
@@ -79,7 +77,7 @@
             </div>
 
             <!-- Tabela de Agendamentos -->
-            <div class="db-card">
+            <div class="db-card" style="margin-top: 24px;">
                 <h3><i class="fa-solid fa-table"></i> Registros de Agendamentos</h3>
                 <div class="table-responsive">
                     <table>
@@ -91,6 +89,7 @@
                                 <th>Data/Horário</th>
                                 <th>Valor</th>
                                 <th>Status</th>
+                                <th>Ação</th>
                             </tr>
                         </thead>
                         <tbody id="db-table-body">
@@ -99,10 +98,80 @@
                     </table>
                 </div>
             </div>
-            
+
+            <!-- RF19 - Gerenciar Serviços (CRUD) -->
+            <div class="db-card" style="margin-top: 24px;">
+                <h3><i class="fa-solid fa-scissors"></i> Gerenciar Serviços</h3>
+
+                <form onsubmit="adicionarServico(event)" class="admin-form-row">
+                    <div class="form-group">
+                        <label for="servico-nome">Nome do Serviço</label>
+                        <input type="text" id="servico-nome" placeholder="Ex: Hidratação" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="servico-valor">Valor (R$)</label>
+                        <input type="number" id="servico-valor" min="0" step="0.01" placeholder="0.00" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Variação de valor</label>
+                        <div class="checkbox-line">
+                            <input type="checkbox" id="servico-variacao">
+                            <span>A partir de</span>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn-primary">CADASTRAR</button>
+                    <button type="button" class="btn-outline" onclick="restaurarServicos()">RESTAURAR PADRÃO</button>
+                </form>
+
+                <div class="table-responsive">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Serviço</th>
+                                <th>Preço</th>
+                                <th>A partir de</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="servicos-table-body"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- RF21 - Horários de Atendimento -->
+            <div class="db-card" style="margin-top: 24px;">
+                <h3><i class="fa-solid fa-clock"></i> Horários de Atendimento</h3>
+                <p class="form-hint" id="horarios-resumo"></p>
+
+                <form onsubmit="handleSalvarHorarios(event)">
+                    <div class="form-group">
+                        <label>Dias de atendimento</label>
+                        <div class="dias-grid">
+                            <label class="checkbox-line"><input type="checkbox" class="dia-check" value="1"> Seg</label>
+                            <label class="checkbox-line"><input type="checkbox" class="dia-check" value="2"> Ter</label>
+                            <label class="checkbox-line"><input type="checkbox" class="dia-check" value="3"> Qua</label>
+                            <label class="checkbox-line"><input type="checkbox" class="dia-check" value="4"> Qui</label>
+                            <label class="checkbox-line"><input type="checkbox" class="dia-check" value="5"> Sex</label>
+                            <label class="checkbox-line"><input type="checkbox" class="dia-check" value="6"> Sáb</label>
+                            <label class="checkbox-line"><input type="checkbox" class="dia-check" value="0"> Dom</label>
+                        </div>
+                    </div>
+                    <div class="admin-form-row">
+                        <div class="form-group">
+                            <label for="horario-abertura">Abertura (hora)</label>
+                            <input type="number" id="horario-abertura" min="0" max="23" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="horario-fechamento">Fechamento (hora)</label>
+                            <input type="number" id="horario-fechamento" min="1" max="24" required>
+                        </div>
+                        <button type="submit" class="btn-primary">SALVAR HORÁRIOS</button>
+                    </div>
+                </form>
+            </div>
         </main>
-    </div> <!-- Fim correto da main-wrapper -->
-    
-    <script src="script.js"></script>
+        <footer>© 2026 Studio Nay Lopes</footer>
+    </div>
+    <script src="script.js?v=2"></script>
 </body>
 </html>

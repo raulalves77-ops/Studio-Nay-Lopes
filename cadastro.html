@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
@@ -31,17 +31,27 @@
                 <a href="galeria.html">Galeria</a>
                 <a href="contato.html">Contato</a>
                 <a href="agendar.html">Agendar</a>
+                <a href="meus-agendamentos.html">Meus Agendamentos</a>
+                <a href="minha-conta.html">Minha Conta</a>
                 <a href="cadastro.html" class="active">Cadastre-se</a>
                 <a href="login.html" class="btn-admin-nav"><i class="fa-solid fa-right-to-bracket"></i> Login</a>
             </nav>
         </header>
 
         <main class="registration-container">
-            <!-- Form exclusivo para Cliente -->
+            <!-- Abas para alternar o formulário -->
+            <div class="tab-buttons">
+                <button class="tab-btn active" onclick="switchForm('cliente')">
+                    <i class="fa-solid fa-user"></i> Cadastro de Cliente
+                </button>
+                <button class="tab-btn" onclick="switchForm('profissional')">
+                    <i class="fa-solid fa-user-tie"></i> Cadastro de Profissional
+                </button>
+            </div>
+
+            <!-- Form Cliente -->
             <form id="form-cliente" class="form-card" onsubmit="handleRegister(event, 'cliente')">
-                <h2>Criar Conta</h2>
-                <p class="form-hint">Cadastre-se para agendar os seus horários com facilidade.</p>
-                
+                <h2>Novo Cliente</h2>
                 <div class="form-group">
                     <label>Nome Completo</label>
                     <input type="text" id="cli-nome" required>
@@ -54,33 +64,34 @@
                     <label>Telefone / WhatsApp</label>
                     <input type="tel" id="cli-telef" placeholder="(11) 99999-9999" required>
                 </div>
-                
-                <!-- Campos de Segurança -->
+                <!-- Campo de senha adicionado conforme o fluxo de autenticação (UC01) -->
                 <div class="form-group">
-                    <label>Senha</label>
-                    <input type="password" id="cli-senha" placeholder="Crie uma senha segura" required>
-                    <!-- Container da barra de força -->
-                    <div class="password-strength-container">
-                        <div class="password-strength-bar" id="strength-bar"></div>
-                    </div>
-                    <span class="password-strength-text" id="strength-text"></span>
+                    <label for="cli-senha">Senha (mín. 8 caracteres)</label>
+                    <input type="password" id="cli-senha" minlength="8" required autocomplete="new-password">
                 </div>
-                
+                <button type="submit" class="btn-primary">CADASTRAR CLIENTE</button>
+            </form>
+
+            <!-- Form Profissional -->
+            <form id="form-profissional" class="form-card" style="display: none;" onsubmit="handleRegister(event, 'profissional')">
+                <h2>Novo Profissional</h2>
                 <div class="form-group">
-                    <label>Confirmar Senha</label>
-                    <input type="password" id="cli-confirma-senha" placeholder="Repita a sua senha" required>
-                    <!-- Texto indicando se as senhas são iguais -->
-                    <span class="password-match-text" id="match-text"></span>
+                    <label>Nome Completo</label>
+                    <input type="text" id="prof-nome" required>
                 </div>
-                
-                <button type="submit" class="btn-primary" style="width: 100%; margin-top: 10px;">CADASTRAR</button>
-                
-                <div style="text-align: center; margin-top: 20px; font-size: 14px; color: var(--text-secondary);">
-                    Já possui cadastro? <a href="login.html" style="color: var(--accent-marsala); font-weight: 600; text-decoration: none;">Faça Login aqui</a>
+                <div class="form-group">
+                    <label>Especialidade</label>
+                    <input type="text" id="prof-especialidade" placeholder="Ex: Cabeleireira, Esteticista" required>
                 </div>
+                <div class="form-group">
+                    <label>Telefone</label>
+                    <input type="tel" id="prof-telef" required>
+                </div>
+                <button type="submit" class="btn-primary">CADASTRAR PROFISSIONAL</button>
             </form>
         </main>
+        <footer>© 2026 Studio Nay Lopes</footer>
     </div>
-    <script src="script.js"></script>
+    <script src="script.js?v=2"></script>
 </body>
 </html>

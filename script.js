@@ -1,120 +1,280 @@
 // PERSISTÊNCIA DE DADOS COM LOCALSTORAGE
 let dbClientes = JSON.parse(localStorage.getItem('dbClientes')) || [];
 let dbProfissionais = JSON.parse(localStorage.getItem('dbProfissionais')) || [];
-let dbAgendamentos = JSON.parse(localStorage.getItem('dbAgendamentos')) || [
-    { id: 101, cliente: "Sarah Jenkins", servico: "Cortes Modernos", data: "24/08/2026 - 09:00", valor: 120.00, status: "Pago" }
-];
+let dbAgendamentos = JSON.parse(localStorage.getItem('dbAgendamentos')) || [];
+
+/* ============================================================
+   SEGURANÇA E AUTENTICAÇÃO
+   ------------------------------------------------------------
+   LIMITE IMPORTANTE: este site é estático (sem servidor). Tudo
+   aqui roda no navegador, então é uma barreira de ORGANIZAÇÃO
+   do fluxo, não uma fronteira de segurança real: quem abrir o
+   DevTools consegue desligar o JavaScript e editar o
+   localStorage. As medidas abaixo (hash de senha, sessão com
+   expiração, limite de tentativas, vínculo da conta à sessão)
+   eliminam vazamentos e erros de lógica graves, mas a proteção
+   que realmente segura o dado exige backend. See o roteiro de
+   produção no README_SECURITY.md.
+   ============================================================ */
+
+const ADMIN_EMAIL = 'admin@studionaylopes.com';
+// Senha de.bootstrap do painel. É a única credencial que existe em
+// texto puro no projeto, e só serve para o PRIMEIRO acesso: no login
+// ela é trocada por hash PBKDF2 e o admin é obrigado a definir outra.
+const ADMIN_SENHA_BOOTSTRAP = 'admin123';
+
+const SESSAO_KEY = 'sbd-sessao';
+const ADMIN_USER_KEY = 'sbd-admin-user';
+const TENTATIVAS_KEY = 'sbd-login-tentativas';
+
+const SESSAO_TTL_MINUTOS = 30;
+const PBKDF2_ITERACOES = 150000;
+const MAX_TENTATIVAS_LOGIN = 5;
+const BLOQUEIO_TENTATIVAS_MS = 5 * 60 * 1000;
+const MIN_LEN_SENHA = 8;
+
+// crypto.subtle só existe em contexto seguro (https:// ou localhost).
+const CRIPTO_FORTE = !!(window.crypto && window.crypto.subtle && typeof TextEncoder === 'function');
+
+if (!CRIPTO_FORTE) {
+    console.warn(
+        '[segurança] Página fora de contexto seguro. O hash cai para o modo ' +
+        'reduzido e a proteção fica apenas simbólica. Publique o site sob HTTPS.'
+    );
+}
+
+function bytesParaHex(bytes) {
+    return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+function hexParaBytes(hex) {
+    const saida = new Uint8Array(hex.length / 2);
+    for (let i = 0; i < saida.length; i++) saida[i] = parseInt(hex.substr(i * 2, 2), 16);
+    return saida;
+}
+
+function gerarSalt() {
+    const bytes = new Uint8Array(16);
+    window.crypto.getRandomValues(bytes);
+    return bytesParaHex(bytes);
+}
+
+/* Digest de último recurso para quando não há crypto.subtle.
+   NÃO é criptografia: existe só para o login não quebrar fora de
+   HTTPS. O aviso no console acima deixa isso explícito. */
+function digestReduzido(texto) {
+    let h1 = 0x811c9dc5, h2 = 0x01000193;
+    for (let i = 0; i < texto.length; i++) {
+        const c = texto.charCodeAt(i);
+        h1 = ((h1 ^ c) * 0x01000193) >>> 0;
+        h2 = ((h2 + c * (i + 7)) ^ (h2 << 5)) >>> 0;
+    }
+    return (h1 >>> 0).toString(16).padStart(8, '0') + (h2 >>> 0).toString(16).padStart(8, '0');
+}
+
+async function derivarHash(senha, saltHex) {
+    if (CRIPTO_FORTE) {
+        const encoder = new TextEncoder();
+        const chave = await window.crypto.subtle.importKey(
+            'raw', encoder.encode(senha), 'PBKDF2', false, ['deriveBits']
+        );
+        const bits = await window.crypto.subtle.deriveBits({
+            name: 'PBKDF2',
+            salt: hexParaBytes(saltHex),
+            iterations: PBKDF2_ITERACOES,
+            hash: 'SHA-256'
+        }, chave, 256);
+        return bytesParaHex(new Uint8Array(bits));
+    }
+    return 'reduzido:' + digestReduzido(saltHex + '|' + senha);
+}
+
+/* Comparação de tempo constante: evita que o tempo de resposta
+   revele quantos caracteres da senha já batem. */
+function comparacaoSegura(a, b) {
+    if (typeof a !== 'string' || typeof b !== 'string') return false;
+    if (a.length !== b.length) return false;
+    let diferenca = 0;
+    for (let i = 0; i < a.length; i++) diferenca |= a.charCodeAt(i) ^ b.charCodeAt(i);
+    return diferenca === 0;
+}
+
+async function criarCredencial(senha) {
+    const salt = gerarSalt();
+    return { salt, hash: await derivarHash(senha, salt) };
+}
+
+async function conferirSenha(senha, credencial) {
+    if (!credencial || !credencial.hash || !credencial.salt) return false;
+    return comparacaoSegura(await derivarHash(senha, credencial.salt), credencial.hash);
+}
+
+function normalizarEmail(valor) {
+    return String(valor == null ? '' : valor).trim().toLowerCase();
+}
+
+/* Só aceita páginas do próprio projeto. Sem isso, o parâmetro
+   ?next= viraria um open redirect para sites externos. */
+function sanearDestino(destino) {
+    const valor = String(destino || '');
+    return /^[A-Za-z0-9_-]+\.html$/.test(valor) ? valor : null;
+}
+
+/* ---------- SESSÃO ---------- */
+
+function criarSessao(email, perfil) {
+    const agora = Date.now();
+    const sessao = {
+        email,
+        perfil,                                  // 'cliente' | 'admin'
+        criadaEm: agora,
+        expiraEm: agora + SESSAO_TTL_MINUTOS * 60 * 1000
+    };
+    // sessionStorage (e não localStorage): fechar o navegador encerra a sessão.
+    try { sessionStorage.setItem(SESSAO_KEY, JSON.stringify(sessao)); } catch (e) {}
+    return sessao;
+}
+
+function obterSessao() {
+    let sessao = null;
+    try { sessao = JSON.parse(sessionStorage.getItem(SESSAO_KEY)); } catch (e) { sessao = null; }
+    if (!sessao || !sessao.email || !sessao.expiraEm || Date.now() > sessao.expiraEm) {
+        encerrarSessao();
+        return null;
+    }
+    return sessao;
+}
+
+function encerrarSessao() {
+    try { sessionStorage.removeItem(SESSAO_KEY); } catch (e) {}
+}
+
+function exigirLoginCliente(pagina = 'minha-conta.html') {
+    const sessao = obterSessao();
+    if (sessao && sessao.perfil === 'cliente') return sessao;
+    encerrarSessao();
+    // Depois do login o visitante volta para a página que tentou abrir.
+    window.location.replace('login.html?next=' + encodeURIComponent(pagina));
+    return null;
+}
+
+/* ---------- LIMITE DE TENTATIVAS ---------- */
+
+function estadoTentativas() {
+    try {
+        const estado = JSON.parse(sessionStorage.getItem(TENTATIVAS_KEY));
+        if (estado && typeof estado.falhas === 'number') return estado;
+    } catch (e) { /* sessão nova */ }
+    return { falhas: 0, bloqueadoAte: 0 };
+}
+
+function salvarTentativas(estado) {
+    try { sessionStorage.setItem(TENTATIVAS_KEY, JSON.stringify(estado)); } catch (e) {}
+}
+
+function registrarFalha() {
+    const estado = estadoTentativas();
+    estado.falhas += 1;
+    if (estado.falhas >= MAX_TENTATIVAS_LOGIN) {
+        estado.bloqueadoAte = Date.now() + BLOQUEIO_TENTATIVAS_MS;
+    }
+    salvarTentativas(estado);
+    return estado;
+}
+
+function limparTentativas() {
+    salvarTentativas({ falhas: 0, bloqueadoAte: 0 });
+}
+
+function minutosDeBloqueio() {
+    const estado = estadoTentativas();
+    const restante = estado.bloqueadoAte - Date.now();
+    return restante > 0 ? Math.ceil(restante / 60000) : 0;
+}
+
+/* ---------- CONTA ADMIN ---------- */
+
+async function garantirAdminPadrao() {
+    let admin = null;
+    try { admin = JSON.parse(localStorage.getItem(ADMIN_USER_KEY)); } catch (e) { admin = null; }
+
+    if (admin && admin.credencial && admin.credencial.hash) return admin;
+
+    // Primeiro uso: cria o admin já com a senha convertida em hash.
+    admin = {
+        email: ADMIN_EMAIL,
+        credencial: await criarCredencial(ADMIN_SENHA_BOOTSTRAP),
+        senhaAlterada: false
+    };
+    try { localStorage.setItem(ADMIN_USER_KEY, JSON.stringify(admin)); } catch (e) {}
+    return admin;
+}
+
+/* ---------- MIGRAÇÃO DE CONTAS ANTIGAS ----------
+   Contas criadas antes desta versão guardavam a senha em texto puro
+   no localStorage. No primeiro login bem-sucedido a senha é
+   reaproveitada como segredo e gravada apenas como hash. */
+
+async function verificarSenhaCliente(cliente, senha) {
+    if (!cliente) return false;
+
+    if (cliente.credencial && cliente.credencial.hash) {
+        return conferirSenha(senha, cliente.credencial);
+    }
+
+    if (typeof cliente.senha === 'string' && cliente.senha) {
+        if (senha !== cliente.senha) return false;
+        await migrarSenhaCliente(cliente, senha);
+        return true;
+    }
+
+    return false;
+}
+
+async function migrarSenhaCliente(cliente, senha) {
+    cliente.credencial = await criarCredencial(senha);
+    delete cliente.senha;
+    delete cliente.senhaProvisoria;
+    localStorage.setItem('dbClientes', JSON.stringify(dbClientes));
+}
+
+// Janela de atendimento informada na página de Contato.
+// A agenda deve respeitar os mesmos limites para não gerar reservas inválidas.
+const HORARIO_ATENDIMENTO = {
+    dias: [1, 2, 3, 4, 5, 6], // segunda a sábado
+    abertura: 9,               // 9h
+    fechamento: 19             // 19h
+};
 
 function salvarAgendamentos() {
     localStorage.setItem('dbAgendamentos', JSON.stringify(dbAgendamentos));
 }
 
-// HORÁRIOS DE ATENDIMENTO (um atendimento por hora cheia)
-const HORARIOS = ['09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00'];
-
-// Lê de novo o localStorage, para pegar agendamentos feitos em outra aba
-function recarregarAgendamentos() {
-    dbAgendamentos = JSON.parse(localStorage.getItem('dbAgendamentos')) || dbAgendamentos;
+/* Escapa texto antes de inserir via innerHTML.
+   Dados cadastrados por usuários não podem injetar HTML. */
+function escapar(texto) {
+    return String(texto == null ? '' : texto)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }
 
-// Nomes dos profissionais cadastrados (se não tiver nenhum, usa um padrão)
-function nomesProfissionais() {
-    const nomes = dbProfissionais.map(p => p.nome);
-    return nomes.length > 0 ? nomes : ['Equipe Studio'];
-}
-
-// Esse profissional já tem agendamento nesse dia e hora?
-function horarioOcupado(dataISO, hora, profissional) {
-    return dbAgendamentos.some(ag =>
-        ag.dataISO === dataISO && ag.hora === hora && ag.profissional === profissional
-    );
-}
-
-// Quais profissionais estão livres nesse dia e hora?
-function profissionaisLivres(dataISO, hora) {
-    return nomesProfissionais().filter(nome => !horarioOcupado(dataISO, hora, nome));
-}
-
-// O horário pode ser escolhido? (RF06: impede choque de horários)
-function horarioDisponivel(dataISO, hora, profissional) {
-    // não deixa marcar horário que já passou
-    if (new Date(`${dataISO}T${hora}:00`) <= new Date()) return false;
-
-    if (profissional) {
-        return !horarioOcupado(dataISO, hora, profissional);
-    }
-    // "Qualquer profissional": serve se pelo menos um estiver livre
-    return profissionaisLivres(dataISO, hora).length > 0;
-}
-
-// Data de hoje no formato AAAA-MM-DD (o formato do input type="date")
-function hojeISO() {
-    const d = new Date();
-    const mes = String(d.getMonth() + 1).padStart(2, '0');
-    const dia = String(d.getDate()).padStart(2, '0');
-    return `${d.getFullYear()}-${mes}-${dia}`;
-}
-
-// DESENHA OS BOTÕES DE HORÁRIO (os ocupados ficam desabilitados)
-function renderizarHorarios() {
-    recarregarAgendamentos();
-
-    const dataISO = document.getElementById('agendar-data').value;
-    const profissional = document.getElementById('agendar-profissional').value;
-    const grade = document.getElementById('agendar-horarios');
-
-    document.getElementById('agendar-horario').value = ''; // limpa a escolha anterior
-
-    if (!dataISO) {
-        grade.innerHTML = '<p class="slots-msg">Escolha uma data para ver os horários.</p>';
-        return;
-    }
-
-    grade.innerHTML = HORARIOS.map(hora => {
-        const livre = horarioDisponivel(dataISO, hora, profissional);
-        return `<button type="button" class="slot-btn" data-hora="${hora}" ${livre ? '' : 'disabled'}>${hora}</button>`;
-    }).join('');
-}
-
-// PREPARA A PÁGINA DE AGENDAR
-function initAgendamento() {
-    const inputData = document.getElementById('agendar-data');
-    const selProf = document.getElementById('agendar-profissional');
-    const selServico = document.getElementById('agendar-servico');
-    const grade = document.getElementById('agendar-horarios');
-    if (!inputData || !grade) return;
-
-    // não deixa escolher dias passados
-    inputData.min = hojeISO();
-
-    // serviço escolhido na página de serviços (agendar.html?servico=Luzes)
-    const servicoURL = new URLSearchParams(window.location.search).get('servico');
-    if (servicoURL) selServico.value = servicoURL;
-
-    // se a pessoa está logada, já preenche nome e e-mail
-    const sessao = JSON.parse(localStorage.getItem('studio_session'));
-    if (sessao) {
-        document.getElementById('agendar-nome').value = sessao.nome;
-        const usuarios = JSON.parse(localStorage.getItem('studio_users')) || [];
-        const usuario = usuarios.find(u => u.id === sessao.userId);
-        if (usuario) document.getElementById('agendar-email').value = usuario.email;
-    }
-
-    // redesenha os horários quando muda a data ou o profissional
-    inputData.addEventListener('change', renderizarHorarios);
-    selProf.addEventListener('change', renderizarHorarios);
-
-    // clique em um horário: marca ele e guarda no campo escondido
-    grade.addEventListener('click', event => {
-        const botao = event.target.closest('.slot-btn');
-        if (!botao || botao.disabled) return;
-
-        grade.querySelectorAll('.slot-btn').forEach(b => b.classList.remove('selected'));
-        botao.classList.add('selected');
-        document.getElementById('agendar-horario').value = botao.dataset.hora;
+/* Formata valores em Real no padrão brasileiro (R$ 1.234,56). */
+function formatarMoeda(valor) {
+    return Number(valor || 0).toLocaleString('pt-BR', {
+        style: 'currency',
+        currency: 'BRL'
     });
+}
 
-    renderizarHorarios();
+/* Indica se a data escolhida está dentro da janela de atendimento. */
+function dentroDoHorarioAtendimento(data) {
+    if (!data) return false;
+    if (!HORARIO_ATENDIMENTO.dias.includes(data.getDay())) return false;
+    return data.getHours() >= HORARIO_ATENDIMENTO.abertura
+        && data.getHours() < HORARIO_ATENDIMENTO.fechamento;
 }
 
 /* ============================================================
@@ -163,7 +323,7 @@ function initTheme() {
 }
 
 /* ============================================================
-   MENU MOBILE
+   MENU MOBILE (HAMBÚRGUER)
    ============================================================ */
 function initMobileNav() {
     const toggle = document.querySelector('.nav-toggle');
@@ -208,23 +368,320 @@ function initMobileNav() {
 document.addEventListener('DOMContentLoaded', () => {
     initTheme();
     initMobileNav();
+    initDelegacaoAcoesAdmin();
+    initSessaoNav();
 
+    // RF09 - o painel administrativo exige autenticação.
     if (document.getElementById('users-table-body') || document.querySelector('.admin-dashboard')) {
-        renderAdminDashboard();
+        if (exigirLoginAdmin()) {
+            garantirAdminPadrao();
+            renderAdminDashboard();
+            renderTabelaServicos();   // RF19
+            renderTabelaHorarios();   // RF21
+        }
+        return; // Nada da área do cliente é renderizado dentro do painel.
     }
+
     if (document.getElementById('agendar-profissional')) {
         popularSelectsAgendamento();
-        initAgendamento();
+        vincularAgendamentoASessao();
     }
-    initServicosPage();
 
+    // RF04 / RF14 - área Minha Conta, exclusiva para quem está logado.
+    if (document.getElementById('perfil-email')) {
+        if (exigirLoginCliente()) {
+            carregarPerfil();
+            renderConfirmacoes();
+        }
+        return;
+    }
+
+    // RF15 - Meus Agendamentos, exclusivo para quem está logado.
+    if (document.getElementById('meus-agendamentos-body')) {
+        if (exigirLoginCliente('meus-agendamentos.html')) {
+            renderMeusAgendamentos();
+        }
+        return;
+    }
+
+    // RF19 - a vitrine pública reflete o catálogo gerenciado pelo admin.
+    if (document.getElementById('lista-servicos')) {
+        sincronizarVitrineServicos();
+    }
+
+    // RF21 - Contato e Agendar mostram a janela real de atendimento.
+    atualizarExibicaoHorarios();
+    // RF07 - o catálogo exibe a profissional titular do studio.
+    // Profissionais extras ficam restritos ao painel administrativo e ao seletor de agendamento.
     const listaProfs = document.getElementById('lista-profissionais');
     if (listaProfs) {
-        dbProfissionais.forEach(p => {
-            listaProfs.innerHTML += `<div class="service-card"><i class="fa-solid fa-user-tie"></i><h3>${p.nome}</h3><p>${p.especialidade} — ${p.telef}</p></div>`;
-        });
+        listaProfs.dataset.catalogo = 'publico';
     }
 });
+
+/* Enquanto não há sessão o menu mostra "Login". Depois do acesso ele
+   vira "Sair", e o atalho de Minha Conta passa a exibir a conta usada.
+   Feito por JS para não ter o mesmo bloco repetido em 11 páginas. */
+function initSessaoNav() {
+    const linkLogin = document.querySelector('.nav-links a[href="login.html"]');
+    if (!linkLogin) return; // página sem esse link (ex.: o próprio painel admin)
+
+    const sessao = obterSessao();
+    if (!sessao) return;
+
+    linkLogin.removeAttribute('href');
+    linkLogin.classList.remove('btn-admin-nav');
+    linkLogin.innerHTML = '<i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i> Sair';
+    linkLogin.addEventListener('click', event => {
+        event.preventDefault();
+        handleLogout();
+    });
+
+    if (sessao.perfil === 'cliente') {
+        const conta = document.querySelector('.nav-links a[href="minha-conta.html"]');
+        if (conta) {
+            conta.innerHTML = '<i class="fa-solid fa-user-gear" aria-hidden="true"></i> Minha Conta';
+            conta.title = sessao.email;
+        }
+    }
+}
+
+/* Quando existe sessão, o e-mail do agendamento é travado no da conta.
+   Sem isso o cliente marcaria com um e-mail solto e depois não
+   encontraria o próprio agendamento em "Meus Agendamentos". */
+function vincularAgendamentoASessao() {
+    const sessao = obterSessao();
+    if (!sessao || sessao.perfil !== 'cliente') return;
+
+    const campoEmail = document.getElementById('agendar-email');
+    if (campoEmail) {
+        campoEmail.value = sessao.email;
+        campoEmail.readOnly = true;
+        campoEmail.title = 'Agendamentos usam o e-mail da sua conta.';
+    }
+    const campoNome = document.getElementById('agendar-nome');
+    const cliente = dbClientes.find(c => c.email === sessao.email);
+    if (campoNome && cliente && !campoNome.value) campoNome.value = cliente.nome;
+}
+
+/* ============================================================
+   RF03 / RF04 - RECUPERAÇÃO DE SENHA E DADOS PESSOAIS
+   Sem backend, a "recuperação" valida o e-mail e gera uma
+   senha provisória que o próprio cliente troca no primeiro acesso.
+   ============================================================ */
+
+function gerarSenhaProvisoria() {
+    const letras = 'abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let senha = '';
+    for (let i = 0; i < 8; i++) {
+        senha += letras.charAt(Math.floor(Math.random() * letras.length));
+    }
+    return senha + 'A1';
+}
+
+async function solicitarRecuperacaoSenha(event) {
+    event.preventDefault();
+    const email = normalizarEmail(document.getElementById('recuperar-email').value);
+    const cliente = dbClientes.find(c => c.email === email);
+
+    if (!cliente) {
+        // Resposta neutra: não revela se o e-mail existe.
+        alert('Se o e-mail estiver cadastrado, as instruções de redefinição serão enviadas.');
+        return;
+    }
+
+    const senhaProvisoria = gerarSenhaProvisoria();
+    // A senha provisória entra direto como hash: nem o próprio
+    // localStorage guarda o texto que o cliente vai digitar.
+    cliente.credencial = await criarCredencial(senhaProvisoria);
+    cliente.senhaProvisoria = true;   // apenas a flag "precisa trocar"
+    delete cliente.senha;
+    localStorage.setItem('dbClientes', JSON.stringify(dbClientes));
+
+    alert(
+        `📧 Instruções enviadas para ${email}.\n\n` +
+        `Neste ambiente de demonstração não há servidor de e-mail, ` +
+        `portanto exibimos a senha provisória:\n\n` +
+        `Senha provisória: ${senhaProvisoria}\n\n` +
+        `Use-a para entrar e depois defina uma nova senha em Minha Conta.`
+    );
+    document.getElementById('recuperar-senha-form').reset();
+}
+
+async function handleUpdatePerfil(event) {
+    event.preventDefault();
+
+    const sessao = obterSessao();
+    if (!sessao || sessao.perfil !== 'cliente') {
+        window.location.replace('login.html?next=minha-conta.html');
+        return;
+    }
+
+    /* A conta editada vem SEMPRE da sessão, nunca do campo de e-mail.
+       Antes, a busca era feita pelo valor digitado no formulário: bastava
+       escrever o e-mail de outra pessoa para sobrescrever nome, telefone
+       e senha da conta alheia (IDOR). */
+    const cliente = dbClientes.find(c => c.email === sessao.email);
+    if (!cliente) {
+        encerrarSessao();
+        window.location.replace('login.html?next=minha-conta.html');
+        return;
+    }
+
+    const nome = document.getElementById('perfil-nome').value.trim();
+    const telefone = document.getElementById('perfil-telef').value.trim();
+    const novoEmail = normalizarEmail(document.getElementById('perfil-email').value);
+
+    if (!nome || !telefone) {
+        alert('⚠️ Preencha nome e telefone.');
+        return;
+    }
+    if (novoEmail !== cliente.email && dbClientes.some(c => c.email === novoEmail)) {
+        alert('⚠️ Este e-mail já pertence a outra conta.');
+        return;
+    }
+
+    cliente.nome = nome;
+    cliente.telef = telefone;
+    cliente.email = novoEmail;
+
+    const novaSenha = document.getElementById('perfil-senha').value;
+    if (novaSenha) {
+        if (novaSenha.length < MIN_LEN_SENHA) {
+            alert(`⚠️ A senha deve ter no mínimo ${MIN_LEN_SENHA} caracteres.`);
+            return;
+        }
+        cliente.credencial = await criarCredencial(novaSenha);
+        delete cliente.senha;
+        delete cliente.senhaProvisoria;
+    }
+
+    localStorage.setItem('dbClientes', JSON.stringify(dbClientes));
+
+    // Mantém a sessão apontando para a conta, mesmo após trocar o e-mail.
+    if (novoEmail !== sessao.email) criarSessao(novoEmail, 'cliente');
+
+    alert('✅ Dados atualizados com sucesso!');
+    carregarPerfil();
+    document.getElementById('perfil-senha').value = '';
+}
+
+function carregarPerfil() {
+    const sessao = obterSessao();
+    if (!sessao || sessao.perfil !== 'cliente') return;
+
+    const cliente = dbClientes.find(c => c.email === sessao.email);
+    if (!cliente) {
+        encerrarSessao();
+        return;
+    }
+
+    document.getElementById('perfil-nome').value = cliente.nome;
+    document.getElementById('perfil-email').value = cliente.email;
+    document.getElementById('perfil-telef').value = cliente.telef;
+
+    const aviso = document.getElementById('perfil-senha-provisoria');
+    if (cliente.senhaProvisoria) {
+        aviso.textContent = '⚠️ Você está usando uma senha provisória. Defina uma nova senha abaixo.';
+        aviso.style.display = 'block';
+    } else {
+        aviso.style.display = 'none';
+    }
+}
+
+/* ============================================================
+   RF14 - CONFIRMAÇÃO DE AGENDAMENTO
+   Sem servidor de e-mail, o registro fica no histórico do
+   cliente e pode ser consultado na área Minha Conta.
+   ============================================================ */
+
+function registrarConfirmacao(ag) {
+    const confirmacoes = JSON.parse(localStorage.getItem('dbConfirmacoes')) || [];
+    confirmacoes.push({
+        id: ag.id,
+        cliente: ag.cliente,
+        email: ag.email,
+        telefone: ag.telefone,
+        servico: ag.servico,
+        data: ag.data,
+        valor: ag.valor,
+        enviadaEm: new Date().toISOString()
+    });
+    localStorage.setItem('dbConfirmacoes', JSON.stringify(confirmacoes));
+}
+
+function renderConfirmacoes() {
+    const corpo = document.getElementById('confirmacoes-body');
+    if (!corpo) return;
+
+    const sessao = obterSessao();
+    if (!sessao || sessao.perfil !== 'cliente') {
+        // Sem sessão o filtro cairia no "mostra tudo" e vazaria as
+        // confirmações de todos os clientes.
+        corpo.innerHTML = '<tr><td colspan="4">Faça login para ver suas confirmações.</td></tr>';
+        return;
+    }
+
+    const confirmacoes = JSON.parse(localStorage.getItem('dbConfirmacoes')) || [];
+    const lista = confirmacoes.filter(c => normalizarEmail(c.email) === sessao.email);
+
+    corpo.innerHTML = '';
+    if (lista.length === 0) {
+        corpo.innerHTML = '<tr><td colspan="4">Nenhuma confirmação registrada.</td></tr>';
+        return;
+    }
+
+    lista.slice().reverse().forEach(c => {
+        corpo.innerHTML += `
+            <tr>
+                <td>#${escapar(c.id)}</td>
+                <td>${escapar(c.servico)}</td>
+                <td>${escapar(c.data)}</td>
+                <td>${escapar(new Date(c.enviadaEm).toLocaleString('pt-BR'))}</td>
+            </tr>`;
+    });
+}
+
+/* RF19 - Mantém a vitrine pública em sincronia com o catálogo do admin. */
+function sincronizarVitrineServicos() {
+    const grid = document.getElementById('lista-servicos');
+    if (!grid) return;
+
+    SERVICOS.forEach(servico => {
+        const cards = grid.querySelectorAll('.service-card');
+        for (const card of cards) {
+            const titulo = card.querySelector('h3');
+            if (!titulo || titulo.textContent.trim() !== servico.nome) continue;
+
+            const preco = card.querySelector('.price');
+            if (preco) {
+                preco.textContent = servico.variacao
+                    ? `A partir de ${formatarMoeda(servico.valor)}`
+                    : formatarMoeda(servico.valor);
+            }
+            break;
+        }
+    });
+}
+
+/* RF21 - Mantém Contato e Agendar alinhados à janela definida pelo admin. */
+function atualizarExibicaoHorarios() {
+    const abre = String(HORARIO_ATENDIMENTO.abertura).padStart(2, '0');
+    const fecha = String(HORARIO_ATENDIMENTO.fechamento).padStart(2, '0');
+    const dias = HORARIO_ATENDIMENTO.dias
+        .slice()
+        .sort((a, b) => (a === 0 ? 7 : a) - (b === 0 ? 7 : b))
+        .map(d => NOMES_DIAS[d])
+        .join(', ');
+
+    const texto = `${dias} — das ${abre}h às ${fecha}h`;
+
+    const contato = document.getElementById('contato-horario');
+    if (contato) contato.textContent = texto;
+
+    const aviso = document.getElementById('agenda-horario-aviso');
+    if (aviso) aviso.textContent = `Atendimento ${texto}. Agenda flexível de acordo com o horário marcado.`;
+}
 
 // ALTERNAR FORMULÁRIO DE CADASTRO
 function switchForm(type) {
@@ -246,44 +703,290 @@ function switchForm(type) {
 }
 
 // CADASTRO DE CLIENTES/PROFISSIONAIS
-function handleRegister(event, type) {
+async function handleRegister(event, type) {
     event.preventDefault();
 
     if (type === 'cliente') {
+        const email = normalizarEmail(document.getElementById('cli-email').value);
+
+        // Evita duplicidade de conta, que quebraria o login por e-mail.
+        if (dbClientes.some(c => c.email === email)) {
+            alert('⚠️ Já existe uma conta com este e-mail.');
+            return;
+        }
+
+        const senha = document.getElementById('cli-senha').value;
+        if (senha.length < MIN_LEN_SENHA) {
+            alert(`⚠️ A senha deve ter no mínimo ${MIN_LEN_SENHA} caracteres.`);
+            return;
+        }
+
         const cliente = {
-            nome: document.getElementById('cli-nome').value,
-            email: document.getElementById('cli-email').value,
-            telef: document.getElementById('cli-telef').value,
-            senha: document.getElementById('cli-senha').value
+            nome: document.getElementById('cli-nome').value.trim(),
+            email: email,
+            telef: document.getElementById('cli-telef').value.trim(),
+            // A senha nunca é gravada: só o hash PBKDF2 e o sal.
+            credencial: await criarCredencial(senha)
         };
         dbClientes.push(cliente);
         localStorage.setItem('dbClientes', JSON.stringify(dbClientes));
-        alert('✨ Cliente cadastrado com sucesso!');
-    } else {
-        const prof = {
-            nome: document.getElementById('prof-nome').value,
-            especialidade: document.getElementById('prof-especialidade').value,
-            telef: document.getElementById('prof-telef').value
-        };
-        dbProfissionais.push(prof);
-        localStorage.setItem('dbProfissionais', JSON.stringify(dbProfissionais));
-        alert('✨ Profissional cadastrado com sucesso!');
+
+        // Já deixa o usuário logado, indo direto para a área protegida.
+        encerrarSessao();
+        criarSessao(cliente.email, 'cliente');
+        alert('✨ Cliente cadastrado com sucesso! Você já está logado.');
+        event.target.reset();
+        window.location.href = 'minha-conta.html';
+        return;
     }
 
+    const prof = {
+        nome: document.getElementById('prof-nome').value.trim(),
+        especialidade: document.getElementById('prof-especialidade').value.trim(),
+        telef: document.getElementById('prof-telef').value.trim()
+    };
+    dbProfissionais.push(prof);
+    localStorage.setItem('dbProfissionais', JSON.stringify(dbProfissionais));
+    alert('✨ Profissional cadastrado com sucesso!');
     event.target.reset();
 }
 
-// SERVIÇOS DISPONÍVEIS (nome, profissional opcional, valor)
-const SERVICOS = [
-    { nome: "Luzes", valor: 350.00 },
-    { nome: "Progressiva", valor: 130.00 },
-    { nome: "Escova", valor: 60.00 },
-    { nome: "Corte", valor: 45.00 },
-    { nome: "Sobrancelha", valor: 15.00 },
-    { nome: "Cílios", valor: 80.00 },
-    { nome: "Manutenção de cílios até 15 dias", valor: 45.00 },
-    { nome: "Remoção de cílios", valor: 45.00 }
+/* ============================================================
+   RF19 / RF21 - CATÁLOGO DE SERVIÇOS E HORÁRIOS DE ATENDIMENTO
+   O catálogo inicial vem do servidor simulado; alterações feitas
+   pelo admin passam a valer e são preservadas no localStorage.
+   ============================================================ */
+
+const SERVICOS_PADRAO = [
+    { nome: "Luzes", valor: 350.00, variacao: true },
+    { nome: "Progressiva", valor: 130.00, variacao: true },
+    { nome: "Escova", valor: 60.00, variacao: true },
+    { nome: "Corte", valor: 45.00, variacao: false },
+    { nome: "Sobrancelha", valor: 15.00, variacao: true },
+    { nome: "Cílios", valor: 80.00, variacao: false },
+    { nome: "Manutenção de cílios até 15 dias", valor: 45.00, variacao: false },
+    { nome: "Remoção de cílios", valor: 45.00, variacao: false }
 ];
+
+const SERVICOS_KEY = 'dbServicos';
+
+function carregarServicos() {
+    const salvos = localStorage.getItem(SERVICOS_KEY);
+    if (salvos) {
+        try {
+            const lista = JSON.parse(salvos);
+            if (Array.isArray(lista) && lista.length) return lista;
+        } catch (e) { /* armazenamento corrompido: recomeça do padrão */ }
+    }
+    return SERVICOS_PADRAO.map(s => ({ ...s }));
+}
+
+function salvarServicos() {
+    localStorage.setItem(SERVICOS_KEY, JSON.stringify(SERVICOS));
+}
+
+let SERVICOS = carregarServicos();
+
+/* RF19 - Admin cadastra serviço. */
+function adicionarServico(event) {
+    event.preventDefault();
+
+    const nome = document.getElementById('servico-nome').value.trim();
+    const valor = Number(document.getElementById('servico-valor').value);
+    const variacao = document.getElementById('servico-variacao').checked;
+
+    if (!nome) {
+        alert('⚠️ Informe o nome do serviço.');
+        return;
+    }
+    if (!Number.isFinite(valor) || valor < 0) {
+        alert('⚠️ Informe um valor válido.');
+        return;
+    }
+    if (SERVICOS.some(s => s.nome.toLowerCase() === nome.toLowerCase())) {
+        alert('⚠️ Já existe um serviço com esse nome.');
+        return;
+    }
+
+    SERVICOS.push({ nome, valor, variacao });
+    salvarServicos();
+    renderTabelaServicos();
+    popularSelectsAgendamento();
+    event.target.reset();
+    alert('✅ Serviço cadastrado.');
+}
+
+/* RF19 - Admin edita valor de um serviço. */
+function editarServico(nome) {
+    const servico = SERVICOS.find(s => s.nome === nome);
+    if (!servico) return;
+
+    const novoValor = prompt(`Novo valor para "${nome}" (R$ ${servico.valor.toFixed(2)}):`,
+        servico.valor.toFixed(2));
+
+    if (novoValor === null) return;
+
+    const valor = Number(novoValor.replace(',', '.'));
+    if (!Number.isFinite(valor) || valor < 0) {
+        alert('⚠️ Valor inválido.');
+        return;
+    }
+
+    servico.valor = valor;
+    salvarServicos();
+    renderTabelaServicos();
+    popularSelectsAgendamento();
+    alert('✅ Serviço atualizado.');
+}
+
+/* RF19 - Admin remove serviço. */
+function excluirServico(nome) {
+    if (!confirm(`Remover o serviço "${nome}" do catálogo?`)) return;
+    const indice = SERVICOS.findIndex(s => s.nome === nome);
+    if (indice === -1) return;
+
+    SERVICOS.splice(indice, 1);
+    salvarServicos();
+    renderTabelaServicos();
+    popularSelectsAgendamento();
+    alert('✅ Serviço removido.');
+}
+
+/* RF19 - Admin restaura o catálogo original. */
+function restaurarServicos() {
+    if (!confirm('Restaurar o catálogo original? Alterações serão perdidas.')) return;
+    localStorage.removeItem(SERVICOS_KEY);
+    SERVICOS = SERVICOS_PADRAO.map(s => ({ ...s }));
+    renderTabelaServicos();
+    popularSelectsAgendamento();
+    alert('✅ Catálogo restaurado.');
+}
+
+function renderTabelaServicos() {
+    const corpo = document.getElementById('servicos-table-body');
+    if (!corpo) return;
+
+    corpo.innerHTML = '';
+    if (SERVICOS.length === 0) {
+        corpo.innerHTML = '<tr><td colspan="4">Nenhum serviço cadastrado.</td></tr>';
+        return;
+    }
+
+    SERVICOS.forEach(s => {
+        const preco = s.variacao ? `A partir de ${formatarMoeda(s.valor)}` : formatarMoeda(s.valor);
+        /* O nome do serviço é dado digitado por quem usa o painel.
+           Antes ele era interpolado num onclick="editarServico('...')":
+           o escapar() converte ' em &#39;, o navegador decodifica de volta
+           para ' ao montar o atributo e o JS quebra a string — XSS.
+           Agora o nome vai em data-nome e o clique é resolvido por
+           delegação, fora de qualquer contexto de string JS. */
+        corpo.innerHTML += `
+            <tr>
+                <td>${escapar(s.nome)}</td>
+                <td>${preco}</td>
+                <td>${s.variacao ? 'Sim' : 'Não'}</td>
+                <td>
+                    <button type="button" class="btn-cancelar" data-acao="editar-servico" data-nome="${escapar(s.nome)}">Editar</button>
+                    <button type="button" class="btn-cancelar" data-acao="excluir-servico" data-nome="${escapar(s.nome)}">Excluir</button>
+                </td>
+            </tr>`;
+    });
+}
+
+/* Delegação de eventos para as tabelas cujas ações não podem usar
+   onclick inline com texto vindo do usuário. */
+function initDelegacaoAcoesAdmin() {
+    const alvos = [
+        { id: 'servicos-table-body', acoes: { 'editar-servico': editarServico, 'excluir-servico': excluirServico } },
+        { id: 'meus-agendamentos-body', acoes: { 'cancelar-agendamento': cancelarAgendamento } },
+        { id: 'db-table-body', acoes: { 'cancelar-agendamento-admin': cancelarAgendamentoAdmin } }
+    ];
+
+    alvos.forEach(({ id, acoes }) => {
+        const corpo = document.getElementById(id);
+        if (!corpo || corpo.dataset.delegado === 'true') return;
+        corpo.dataset.delegado = 'true';
+
+        corpo.addEventListener('click', event => {
+            const botao = event.target.closest('button[data-acao]');
+            if (!botao || !corpo.contains(botao)) return;
+
+            const acao = acoes[botao.dataset.acao];
+            if (typeof acao !== 'function') return;
+
+            const idOuNome = botao.dataset.acao === 'editar-servico' || botao.dataset.acao === 'excluir-servico'
+                ? botao.dataset.nome
+                : botao.dataset.id;
+
+            acao(idOuNome);
+        });
+    });
+}
+
+/* RF21 - Admin gerencia a janela de atendimento. */
+const HORARIOS_KEY = 'dbHorarios';
+
+function carregarHorarios() {
+    const salvos = localStorage.getItem(HORARIOS_KEY);
+    if (salvos) {
+        try { return { ...HORARIO_ATENDIMENTO, ...JSON.parse(salvos) }; } catch (e) { /* padrão */ }
+    }
+    return { ...HORARIO_ATENDIMENTO };
+}
+
+function salvarHorarios() {
+    localStorage.setItem(HORARIOS_KEY, JSON.stringify({
+        dias: HORARIO_ATENDIMENTO.dias,
+        abertura: HORARIO_ATENDIMENTO.abertura,
+        fechamento: HORARIO_ATENDIMENTO.fechamento
+    }));
+    renderTabelaHorarios();
+}
+
+const NOMES_DIAS = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+
+function handleSalvarHorarios(event) {
+    event.preventDefault();
+
+    const abertura = Number(document.getElementById('horario-abertura').value);
+    const fechamento = Number(document.getElementById('horario-fechamento').value);
+
+    if (!Number.isFinite(abertura) || !Number.isFinite(fechamento) || abertura >= fechamento) {
+        alert('⚠️ O horário de abertura deve ser menor que o de fechamento.');
+        return;
+    }
+
+    const dias = [];
+    document.querySelectorAll('.dia-check:checked').forEach(c => dias.push(Number(c.value)));
+    if (dias.length === 0) {
+        alert('⚠️ Selecione ao menos um dia de atendimento.');
+        return;
+    }
+
+    HORARIO_ATENDIMENTO.abertura = abertura;
+    HORARIO_ATENDIMENTO.fechamento = fechamento;
+    HORARIO_ATENDIMENTO.dias = dias;
+    salvarHorarios();
+
+    alert('✅ Horários de atendimento atualizados.');
+}
+
+function renderTabelaHorarios() {
+    const corpo = document.getElementById('horarios-resumo');
+    if (!corpo) return;
+
+    const dias = HORARIO_ATENDIMENTO.dias.map(d => NOMES_DIAS[d]).join(', ');
+    corpo.textContent =
+        `Atendimento: ${dias} — das ` +
+        `${String(HORARIO_ATENDIMENTO.abertura).padStart(2, '0')}h às ` +
+        `${String(HORARIO_ATENDIMENTO.fechamento).padStart(2, '0')}h`;
+
+    document.querySelectorAll('.dia-check').forEach(c => {
+        c.checked = HORARIO_ATENDIMENTO.dias.includes(Number(c.value));
+    });
+    document.getElementById('horario-abertura').value = HORARIO_ATENDIMENTO.abertura;
+    document.getElementById('horario-fechamento').value = HORARIO_ATENDIMENTO.fechamento;
+}
 
 // PREENCHER SELECTS DO FORMULÁRIO DE AGENDAMENTO
 function popularSelectsAgendamento() {
@@ -291,111 +994,260 @@ function popularSelectsAgendamento() {
     const selProf = document.getElementById('agendar-profissional');
 
     if (selServico) {
-        selServico.innerHTML = SERVICOS.map(s => `<option value="${s.nome}" data-valor="${s.valor}">${s.nome} — R$ ${s.valor.toFixed(2)}</option>`).join('');
+        selServico.innerHTML = SERVICOS.map(s => {
+            const preco = s.variacao
+                ? `A partir de ${formatarMoeda(s.valor)}`
+                : formatarMoeda(s.valor);
+            return `<option value="${escapar(s.nome)}" data-valor="${s.valor}">${escapar(s.nome)} — ${preco}</option>`;
+        }).join('');
     }
     if (selProf) {
         selProf.innerHTML = '<option value="">Qualquer profissional</option>' +
-            dbProfissionais.map(p => `<option value="${p.nome}">${p.nome} (${p.especialidade})</option>`).join('');
+            dbProfissionais.map(p => `<option value="${escapar(p.nome)}">${escapar(p.nome)} (${escapar(p.especialidade)})</option>`).join('');
     }
 }
 
 // CRIAR AGENDAMENTO
 function handleBooking(event) {
     event.preventDefault();
-    recarregarAgendamentos();
 
-    const nome = document.getElementById('agendar-nome').value.trim();
-    const email = document.getElementById('agendar-email').value.trim();
     const servicoSel = document.getElementById('agendar-servico');
     const servico = SERVICOS.find(s => s.nome === servicoSel.value);
-    const dataISO = document.getElementById('agendar-data').value;
-    const hora = document.getElementById('agendar-horario').value;
-    let profissional = document.getElementById('agendar-profissional').value;
+    const dataHora = document.getElementById('agendar-data').value;
 
-    if (!hora) {
-        alert('Escolha um horário disponível.');
+    // RF08 - a data precisa estar dentro da janela de atendimento.
+    const escolhida = new Date(dataHora);
+    if (!dentroDoHorarioAtendimento(escolhida)) {
+        alert('⚠️ Escolha um horário de segunda a sábado, das 9h às 19h.');
         return;
     }
 
-    // RF06: confere DE NOVO antes de salvar (outra pessoa pode ter reservado agora)
-    if (!horarioDisponivel(dataISO, hora, profissional)) {
-        alert('Esse horário acabou de ser ocupado. Escolha outro.');
-        renderizarHorarios();
+    // RF12 - impede reserva duplicada no mesmo horário (evita choque de agenda).
+    // A comparação usa o timestamp, pois o texto formatado não é parseável de forma confiável.
+    const jaExiste = dbAgendamentos.some(a => {
+        if (a.status === 'Cancelado') return false;
+        const d = a.dataIso ? new Date(a.dataIso) : null;
+        return d && !isNaN(d.getTime()) && d.getTime() === escolhida.getTime();
+    });
+    if (jaExiste) {
+        alert('⚠️ Este horário já foi reservado. Escolha outro.');
         return;
     }
 
-    // "Qualquer profissional": fica com o primeiro que estiver livre
-    if (!profissional) {
-        profissional = profissionaisLivres(dataISO, hora)[0];
-    }
-
-    const [ano, mes, dia] = dataISO.split('-');
-    const sessao = JSON.parse(localStorage.getItem('studio_session'));
-
+    const sessao = obterSessao();
     const ag = {
         id: Date.now().toString().slice(-6),
-        clienteId: sessao ? sessao.userId : null,
-        cliente: nome,
-        email: email,
+        cliente: document.getElementById('agendar-nome').value,
+        telefone: document.getElementById('agendar-telef') ? document.getElementById('agendar-telef').value : '',
+        // Com sessão ativa, o e-mail vem da conta logada e não do campo,
+        // para que o agendamento sempre apareça em "Meus Agendamentos".
+        email: sessao && sessao.perfil === 'cliente'
+            ? sessao.email
+            : normalizarEmail(document.getElementById('agendar-email') ? document.getElementById('agendar-email').value : ''),
         servico: servicoSel.value,
-        profissional: profissional,
-        dataISO: dataISO,                       // usado para checar choque
-        hora: hora,                             // usado para checar choque
-        data: `${dia}/${mes}/${ano} - ${hora}`, // usado para mostrar (painel admin)
+        dataIso: dataHora || '',
+        data: dataHora ? escolhida.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '',
         valor: servico ? servico.valor : 0,
         status: "Pendente"
     };
 
     dbAgendamentos.push(ag);
     salvarAgendamentos();
-    mostrarConfirmacao(ag);
+
+    // RF14 - registra a confirmação enviada ao cliente.
+    registrarConfirmacao(ag);
+
+    const preco = servico && servico.variacao
+        ? `A partir de ${formatarMoeda(ag.valor)}`
+        : formatarMoeda(ag.valor);
+
+    alert(`✨ Agendamento confirmado para ${ag.data}!\nServiço: ${ag.servico} — ${preco}\n\nA confirmação foi registrada e pode ser consultada em Minha Conta.`);
+    event.target.reset();
+    // O reset também limpa o e-mail travado; devolve os dados da conta.
+    vincularAgendamentoASessao();
+    renderMeusAgendamentos();
 }
 
-// MOSTRA A CONFIRMAÇÃO + E-MAIL SIMULADO (RF07 e RF13)
-function mostrarConfirmacao(ag) {
-    const dados = {
-        ...ag,
-        valor: 'R$ ' + Number(ag.valor).toFixed(2).replace('.', ',')
-    };
+/* RF16 - Cancelar um agendamento existente.
+   Regra de antecedência mínima: 2 horas antes do horário marcado. */
+const ANTECEDENCIA_MINIMA_HORAS = 2;
 
-    document.querySelectorAll('#confirmacao [data-campo]').forEach(el => {
-        el.textContent = dados[el.dataset.campo];
-    });
+function cancelarAgendamento(id) {
+    const indice = dbAgendamentos.findIndex(a => a.id === id);
+    if (indice === -1) return;
 
-    console.log(`E-mail simulado enviado para ${ag.email}: agendamento de ${ag.servico} em ${ag.data}`);
+    const agendamento = dbAgendamentos[indice];
 
-    document.getElementById('form-agendamento').hidden = true;
-    document.getElementById('confirmacao').hidden = false;
-}
+    /* Só o dono da reserva ou o admin podem cancelar. Sem esta checagem,
+       qualquer visitante poderia cancelar o horário de outra pessoa
+       simplesmente passando o id. */
+    const sessao = obterSessao();
+    const souDono = sessao && sessao.perfil === 'cliente'
+        && normalizarEmail(agendamento.email) === sessao.email;
+    const souAdmin = sessao && sessao.perfil === 'admin';
 
-// VOLTAR PARA O FORMULÁRIO
-function novoAgendamento() {
-    const form = document.getElementById('form-agendamento');
-    form.reset();
-    form.hidden = false;
-    document.getElementById('confirmacao').hidden = true;
-    renderizarHorarios();
-}
-
-// LOGIN SIMPLES (cliente cadastrado ou admin fixo)
-function handleLogin(event) {
-    event.preventDefault();
-    const email = document.getElementById('login-email').value;
-    const senha = document.getElementById('login-senha').value;
-
-    if (email === 'admin@studio.com' && senha === 'admin123') {
-        alert('Login de administrador realizado!');
-        window.location.href = 'admin.html';
+    if (!souDono && !souAdmin) {
+        alert('⚠️ Você só pode cancelar os próprios agendamentos.');
         return;
     }
 
-    const cliente = dbClientes.find(c => c.email === email && c.senha === senha);
-    if (cliente) {
-        alert(`Bem-vinda, ${cliente.nome}!`);
-        window.location.href = 'index.html';
-    } else {
-        alert('E-mail ou senha incorretos.');
+    if (agendamento.status === 'Cancelado') {
+        alert('Este agendamento já está cancelado.');
+        return;
     }
+
+    // Usa o timestamp armazenado; o texto formatado serve apenas para exibição.
+    const data = agendamento.dataIso ? new Date(agendamento.dataIso) : new Date('');
+    const limite = new Date(data.getTime() - ANTECEDENCIA_MINIMA_HORAS * 60 * 60 * 1000);
+
+    if (!isNaN(data.getTime()) && Date.now() > limite) {
+        alert(`⚠️ O cancelamento deve ser feito com pelo menos ${ANTECEDENCIA_MINIMA_HORAS}h de antecedência.`);
+        return;
+    }
+
+    agendamento.status = 'Cancelado';
+    salvarAgendamentos();
+
+    if (typeof renderAdminDashboard === 'function') renderAdminDashboard();
+    if (typeof renderMeusAgendamentos === 'function') renderMeusAgendamentos();
+    alert('✅ Agendamento cancelado.');
+}
+
+/* RF23 - Cancelamento pelo administrador, sem regra de antecedência. */
+function cancelarAgendamentoAdmin(id) {
+    const sessao = obterSessao();
+    if (!sessao || sessao.perfil !== 'admin') {
+        window.location.replace('login.html?next=admin.html');
+        return;
+    }
+
+    const agendamento = dbAgendamentos.find(a => a.id === id);
+    if (!agendamento) return;
+    if (agendamento.status === 'Cancelado') {
+        alert('Este agendamento já está cancelado.');
+        return;
+    }
+    if (!confirm(`Cancelar o agendamento #${agendamento.id} de ${agendamento.cliente}?`)) return;
+
+    agendamento.status = 'Cancelado';
+    salvarAgendamentos();
+    renderAdminDashboard();
+}
+
+/* RF15 - Consultar os agendamentos do cliente. */
+function renderMeusAgendamentos() {
+    const corpo = document.getElementById('meus-agendamentos-body');
+    if (!corpo) return;
+
+    const sessao = obterSessao();
+    if (!sessao || sessao.perfil !== 'cliente') {
+        corpo.innerHTML = '<tr><td colspan="5">Faça login para consultar seus agendamentos.</td></tr>';
+        return;
+    }
+
+    /* A lista é sempre a da conta logada. Antes, sem filtro por nome a
+       tabela trazia TODOS os agendamentos do studio, e o campo de nome
+       permitia ver e cancelar os de qualquer pessoa. */
+    const lista = dbAgendamentos.filter(a => normalizarEmail(a.email) === sessao.email);
+
+    corpo.innerHTML = '';
+    if (lista.length === 0) {
+        corpo.innerHTML = '<tr><td colspan="5">Nenhum agendamento encontrado.</td></tr>';
+        return;
+    }
+
+    lista.slice().reverse().forEach(a => {
+        const classe = a.status === 'Cancelado' ? 'badge-cancelado' : (a.status === 'Pago' ? 'badge-pago' : 'badge-pendente');
+        const acao = a.status === 'Cancelado'
+            ? '<span style="color:var(--text-secondary);font-size:12px;">—</span>'
+            : `<button type="button" class="btn-cancelar" data-acao="cancelar-agendamento" data-id="${escapar(a.id)}">Cancelar</button>`;
+        corpo.innerHTML += `
+            <tr>
+                <td>#${escapar(a.id)}</td>
+                <td>${escapar(a.servico)}</td>
+                <td>${escapar(a.data)}</td>
+                <td><span class="${classe}">${escapar(a.status)}</span></td>
+                <td>${acao}</td>
+            </tr>`;
+    });
+}
+
+/* LOGIN (cliente cadastrado ou administrador).
+   A senha do admin não é comparada em texto puro: o script só tem o
+   hash PBKDF2 guardado no navegador. */
+async function handleLogin(event) {
+    event.preventDefault();
+
+    const bloqueio = minutosDeBloqueio();
+    if (bloqueio > 0) {
+        alert(`⛔ Muitas tentativas incorretas. Tente novamente em ${bloqueio} minuto(s).`);
+        return;
+    }
+
+    const email = normalizarEmail(document.getElementById('login-email').value);
+    const senha = document.getElementById('login-senha').value;
+
+    if (!email || !senha) {
+        alert('⚠️ Informe e-mail e senha.');
+        return;
+    }
+
+    // Só páginas internas do projeto são aceitas como destino (anti open redirect).
+    const destino = sanearDestino(new URLSearchParams(location.search).get('next'));
+
+    const admin = await garantirAdminPadrao();
+    if (email === normalizarEmail(admin.email)) {
+        if (await conferirSenha(senha, admin.credencial)) {
+            limparTentativas();
+            encerrarSessao();
+            criarSessao(admin.email, 'admin');
+            window.location.href = destino || 'admin.html';
+        } else {
+            avisarFalhaNoLogin();
+        }
+        return;
+    }
+
+    const cliente = dbClientes.find(c => c.email === email);
+    if (cliente && await verificarSenhaCliente(cliente, senha)) {
+        limparTentativas();
+        encerrarSessao();
+        criarSessao(cliente.email, 'cliente');
+
+        // RF03 - o primeiro acesso usa a senha provisória.
+        if (cliente.senhaProvisoria) {
+            alert('💖 Bem-vinda! Você está usando uma senha provisória.\nDefina uma nova senha em Minha Conta.');
+        } else {
+            alert(`💖 Bem-vinda, ${cliente.nome}!`);
+        }
+        window.location.href = destino || 'minha-conta.html';
+    } else {
+        avisarFalhaNoLogin();
+    }
+}
+
+function avisarFalhaNoLogin() {
+    const estado = registrarFalha();
+    const faltam = MAX_TENTATIVAS_LOGIN - estado.falhas;
+    if (faltam <= 0) {
+        alert(`⛔ Acesso bloqueado por ${Math.round(BLOQUEIO_TENTATIVAS_MS / 60000)} minutos após ${MAX_TENTATIVAS_LOGIN} tentativas.`);
+    } else {
+        alert(`❌ E-mail ou senha incorretos.\nVocê ainda tem ${faltam} tentativa(s) antes do bloqueio temporário.`);
+    }
+}
+
+/* RF09 - O Painel Admin só abre para quem passou pelo login. */
+function exigirLoginAdmin() {
+    const sessao = obterSessao();
+    if (sessao && sessao.perfil === 'admin') return true;
+    encerrarSessao();
+    window.location.replace('login.html?next=admin.html');
+    return false;
+}
+
+function handleLogout() {
+    encerrarSessao();
+    window.location.href = 'login.html';
 }
 
 // CARREGAR DADOS NO PAINEL ADMIN
@@ -406,10 +1258,10 @@ function renderAdminDashboard() {
     if (usersTbody) {
         usersTbody.innerHTML = '';
         dbClientes.forEach(c => {
-            usersTbody.innerHTML += `<tr><td><span class="badge-cli">Cliente</span></td><td>${c.nome}</td><td>${c.telef} | ${c.email}</td></tr>`;
+            usersTbody.innerHTML += `<tr><td><span class="badge-cli">Cliente</span></td><td>${escapar(c.nome)}</td><td>${escapar(c.telef)} | ${escapar(c.email)}</td></tr>`;
         });
         dbProfissionais.forEach(p => {
-            usersTbody.innerHTML += `<tr><td><span class="badge-prof">Profissional</span></td><td>${p.nome}</td><td>${p.especialidade} (${p.telef})</td></tr>`;
+            usersTbody.innerHTML += `<tr><td><span class="badge-prof">Profissional</span></td><td>${escapar(p.nome)}</td><td>${escapar(p.especialidade)} (${escapar(p.telef)})</td></tr>`;
         });
         if (dbClientes.length === 0 && dbProfissionais.length === 0) {
             usersTbody.innerHTML = '<tr><td colspan="3">Nenhum registro ainda.</td></tr>';
@@ -419,15 +1271,19 @@ function renderAdminDashboard() {
     if (bookingsTbody) {
         bookingsTbody.innerHTML = '';
         dbAgendamentos.forEach(b => {
-            const badge = b.status === 'Pago' ? 'badge-pago' : 'badge-pendente';
+            const classe = b.status === 'Cancelado' ? 'badge-cancelado' : (b.status === 'Pago' ? 'badge-pago' : 'badge-pendente');
+            const acao = b.status === 'Cancelado'
+                ? '<span style="color:var(--text-secondary);font-size:12px;">—</span>'
+                : `<button type="button" class="btn-cancelar" data-acao="cancelar-agendamento-admin" data-id="${escapar(b.id)}">Cancelar</button>`;
             bookingsTbody.innerHTML += `
                 <tr>
-                    <td>#${b.id}</td>
-                    <td>${b.cliente}</td>
-                    <td>${b.servico}</td>
-                    <td>${b.data}</td>
-                    <td>R$ ${Number(b.valor).toFixed(2)}</td>
-                    <td><span class="${badge}">${b.status}</span></td>
+                    <td>#${escapar(b.id)}</td>
+                    <td>${escapar(b.cliente)}</td>
+                    <td>${escapar(b.servico)}</td>
+                    <td>${escapar(b.data)}</td>
+                    <td>${formatarMoeda(b.valor)}</td>
+                    <td><span class="${classe}">${escapar(b.status)}</span></td>
+                    <td>${acao}</td>
                 </tr>`;
         });
     }
@@ -437,7 +1293,7 @@ function renderAdminDashboard() {
     const elRev = document.getElementById('total-revenue');
     const elBookings = document.getElementById('total-bookings');
     const elOccupancy = document.getElementById('occupancy-rate');
-    if (elRev) elRev.innerText = `R$ ${totalRev.toFixed(2).replace('.', ',')}`;
+    if (elRev) elRev.innerText = formatarMoeda(totalRev);
     if (elBookings) elBookings.innerText = dbAgendamentos.length;
     if (elOccupancy) elOccupancy.innerText = Math.min(100, dbAgendamentos.length * 10) + '%';
 }
@@ -548,230 +1404,4 @@ if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initMediaLightbox);
 } else {
     initMediaLightbox();
-}
-
-// Lógica de Validação de Senha em Tempo Real
-document.addEventListener('DOMContentLoaded', () => {
-    const senhaInput = document.getElementById('cli-senha');
-    const confirmaSenhaInput = document.getElementById('cli-confirma-senha');
-    const strengthBar = document.getElementById('strength-bar');
-    const strengthText = document.getElementById('strength-text');
-    const matchText = document.getElementById('match-text');
-
-    if (senhaInput && strengthBar && strengthText) {
-        senhaInput.addEventListener('input', () => {
-            const val = senhaInput.value;
-            let strength = 0;
-
-            // Critérios de pontuação:
-            if (val.length >= 8) strength += 1; // Pelo menos 8 caracteres
-            if (val.match(/(?=.*[a-z])(?=.*[A-Z])/)) strength += 1; // Maiúscula e Minúscula
-            if (val.match(/(?=.*\d)/)) strength += 1; // Número
-            if (val.match(/(?=.*[^a-zA-Z\d])/)) strength += 1; // Caractere Especial
-
-            // Reseta as classes
-            strengthBar.className = 'password-strength-bar';
-            strengthText.className = 'password-strength-text';
-
-            // Aplica o feedback visual
-            if (val.length === 0) {
-                strengthText.textContent = '';
-            } else if (strength <= 2) {
-                strengthBar.classList.add('strength-weak');
-                strengthText.classList.add('text-weak');
-                strengthText.textContent = 'Força: Fraca (Adicione números e símbolos)';
-            } else if (strength === 3) {
-                strengthBar.classList.add('strength-medium');
-                strengthText.classList.add('text-medium');
-                strengthText.textContent = 'Força: Média (Adicione mais variedade)';
-            } else if (strength >= 4) {
-                strengthBar.classList.add('strength-strong');
-                strengthText.classList.add('text-strong');
-                strengthText.textContent = 'Força: Forte';
-            }
-
-            // Revalida se as senhas batem ao alterar a primeira senha
-            if (confirmaSenhaInput) checkMatch();
-        });
-    }
-
-    if (confirmaSenhaInput && matchText) {
-        confirmaSenhaInput.addEventListener('input', checkMatch);
-    }
-
-    function checkMatch() {
-        if (confirmaSenhaInput.value.length === 0) {
-            matchText.textContent = '';
-            return;
-        }
-        if (senhaInput.value === confirmaSenhaInput.value) {
-            matchText.textContent = 'As senhas coincidem!';
-            matchText.className = 'password-match-text match-yes';
-        } else {
-            matchText.textContent = 'As senhas não coincidem.';
-            matchText.className = 'password-match-text match-no';
-        }
-    }
-});
-
-/* =======================================================
-   MÓDULO DE AUTENTICAÇÃO E SESSÃO (Simulação JWT/Sessão)
-======================================================= */
-
-// 1. Inicializar a base de dados fictícia de utilizadores se não existir
-if (!localStorage.getItem('studio_users')) {
-    const defaultUsers = [
-        {
-            id: 1,
-            nome: 'Admin Studio',
-            email: 'admin@studio.com',
-            senha: 'admin123',
-            tipo: 'admin'
-        }
-    ];
-    localStorage.setItem('studio_users', JSON.stringify(defaultUsers));
-}
-
-// 2. Função de Registo de Cliente
-function handleRegister(event) {
-    event.preventDefault();
-
-    const nome = document.getElementById('cli-nome').value;
-    const email = document.getElementById('cli-email').value;
-    const telef = document.getElementById('cli-telef').value;
-    const senha = document.getElementById('cli-senha').value;
-    const confSenha = document.getElementById('cli-confirma-senha').value;
-
-    if (senha !== confSenha) {
-        alert('As palavras-passe não coincidem. Por favor, verifique.');
-        return;
-    }
-
-    let users = JSON.parse(localStorage.getItem('studio_users'));
-
-    // Verificar se o e-mail já existe
-    if (users.find(u => u.email === email)) {
-        alert('Este e-mail já está registado. Por favor, faça login.');
-        return;
-    }
-
-    const newUser = {
-        id: Date.now(),
-        nome: nome,
-        email: email,
-        telefone: telef,
-        senha: senha,
-        tipo: 'cliente' // Força o tipo para Cliente (RF02)
-    };
-
-    users.push(newUser);
-    localStorage.setItem('studio_users', JSON.stringify(users));
-
-    alert('Conta criada com sucesso! Já pode iniciar sessão.');
-    window.location.href = 'login.html';
-}
-
-// 3. Função de Login
-function handleLogin(event) {
-    event.preventDefault();
-
-    const email = document.getElementById('login-email').value;
-    const senha = document.getElementById('login-senha').value;
-
-    let users = JSON.parse(localStorage.getItem('studio_users'));
-    const user = users.find(u => u.email === email && u.senha === senha);
-
-    if (user) {
-        // Criar a "sessão" simulando um JWT payload
-        const sessionData = {
-            token: 'jwt_simulated_' + Date.now(),
-            userId: user.id,
-            nome: user.nome,
-            tipo: user.tipo
-        };
-        localStorage.setItem('studio_session', JSON.stringify(sessionData));
-
-        alert(`Bem-vindo(a) de volta, ${user.nome.split(' ')[0]}!`);
-
-        // Diferenciar a navegação conforme o Perfil
-        if (user.tipo === 'admin') {
-            window.location.href = 'admin.html';
-        } else {
-            window.location.href = 'index.html'; // Cliente vai para a Home ou Agendar
-        }
-    } else {
-        alert('E-mail ou palavra-passe incorretos.');
-    }
-}
-
-// 4. Função de Recuperação de Palavra-passe
-function handleRecuperarSenha(event) {
-    event.preventDefault();
-    const email = document.getElementById('recuperar-email').value;
-
-    // Simulação visual para o utilizador
-    alert(`Se o e-mail '${email}' estiver registado, receberá as instruções em breve.`);
-    window.location.href = 'login.html';
-}
-
-// 5. Função de Logout
-function logout() {
-    localStorage.removeItem('studio_session');
-    window.location.href = 'login.html';
-}
-
-// 6. Diferenciar visualmente a Navegação (Executa em todas as páginas)
-document.addEventListener('DOMContentLoaded', () => {
-    const session = JSON.parse(localStorage.getItem('studio_session'));
-    const navLinks = document.getElementById('site-navigation');
-
-    if (session && navLinks) {
-        // Encontrar as hiperligações existentes no menu
-        const loginLink = navLinks.querySelector('a[href="login.html"]');
-        const cadastroLink = navLinks.querySelector('a[href="cadastro.html"]');
-
-        // Esconder o botão de registo, pois o utilizador já tem sessão iniciada
-        if (cadastroLink) {
-            cadastroLink.style.display = 'none';
-        }
-
-        // Alterar o botão "Login" para "Sair (Nome)"
-        if (loginLink) {
-            loginLink.innerHTML = `<i class="fa-solid fa-right-from-bracket"></i> Sair (${session.nome.split(' ')[0]})`;
-            loginLink.href = "#";
-            loginLink.classList.remove('active');
-            loginLink.style.backgroundColor = 'transparent';
-            loginLink.style.border = '1px solid var(--accent-marsala)';
-            loginLink.style.color = 'var(--accent-marsala)';
-
-            // Adicionar evento de logout
-            loginLink.addEventListener('click', (e) => {
-                e.preventDefault();
-                logout();
-            });
-        }
-
-        // Se for um Administrador, adicionar o atalho para o Painel de Gestão
-        if (session.tipo === 'admin') {
-            const adminLink = document.createElement('a');
-            adminLink.href = 'admin.html';
-            adminLink.innerHTML = '<i class="fa-solid fa-gear"></i> Painel Admin';
-            adminLink.className = 'btn-admin-nav'; // Mantém o destaque do botão
-            navLinks.insertBefore(adminLink, loginLink);
-        }
-    }
-});
-
-// BOTÃO "AGENDAR" EM CADA SERVIÇO (página servicos.html)
-function initServicosPage() {
-    document.querySelectorAll('.service-card--icon').forEach(card => {
-        const nome = card.querySelector('h3').textContent;
-
-        const link = document.createElement('a');
-        link.href = 'agendar.html?servico=' + encodeURIComponent(nome);
-        link.className = 'btn-primary btn-small';
-        link.textContent = 'AGENDAR';
-
-        card.appendChild(link);
-    });
 }
