@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cadastro - Studio Nay Lopes</title>
+    <link rel="stylesheet" href="style.css">
+    <script>
+        (function () {
+            try {
+                var theme = localStorage.getItem('sbd-theme');
+                if (!theme && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) theme = 'dark';
+                if (theme === 'light' || theme === 'dark') document.documentElement.setAttribute('data-theme', theme);
+            } catch (e) {}
+        })();
+    </script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="main-wrapper">
+        <header class="navbar">
+            <div class="logo"><i class="fa-solid fa-spa logo-icon"></i><div class="logo-text"><span>Studio</span><strong>Nay Lopes</strong></div></div>
+            <div class="nav-actions">
+                <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Ativar modo escuro" title="Modo escuro"><i class="fa-solid fa-moon" aria-hidden="true"></i></button>
+                <button type="button" class="nav-toggle" aria-expanded="false" aria-label="Abrir menu" aria-controls="site-navigation"><i class="fa-solid fa-bars" aria-hidden="true"></i></button>
+            </div>
+            <nav class="nav-links" id="site-navigation" aria-label="Navegação principal">
+                <a href="index.html">Home</a>
+                <a href="servicos.html">Serviços</a>
+                <a href="profissionais.html">Profissionais</a>
+                <a href="galeria.html">Galeria</a>
+                <a href="contato.html">Contato</a>
+                <a href="agendar.html">Agendar</a>
+                <a href="meus-agendamentos.html">Meus Agendamentos</a>
+                <a href="minha-conta.html">Minha Conta</a>
+                <a href="cadastro.html" class="active">Cadastre-se</a>
+                <a href="login.html" class="btn-admin-nav"><i class="fa-solid fa-right-to-bracket"></i> Login</a>
+            </nav>
+        </header>
+
+        <main class="registration-container">
+            <!-- Abas para alternar o formulário -->
+            <div class="tab-buttons">
+                <button class="tab-btn active" onclick="switchForm('cliente')">
+                    <i class="fa-solid fa-user"></i> Cadastro de Cliente
+                </button>
+                <button class="tab-btn" onclick="switchForm('profissional')">
+                    <i class="fa-solid fa-user-tie"></i> Cadastro de Profissional
+                </button>
+            </div>
+
+            <!-- Form Cliente -->
+            <form id="form-cliente" class="form-card" onsubmit="handleRegister(event, 'cliente')">
+                <h2>Novo Cliente</h2>
+                <div class="form-group">
+                    <label>Nome Completo</label>
+                    <input type="text" id="cli-nome" required>
+                </div>
+                <div class="form-group">
+                    <label>E-mail</label>
+                    <input type="email" id="cli-email" required>
+                </div>
+                <div class="form-group">
+                    <label>Telefone / WhatsApp</label>
+                    <input type="tel" id="cli-telef" placeholder="(11) 99999-9999" required>
+                </div>
+                <!-- Campo de senha adicionado conforme o fluxo de autenticação (UC01) -->
+                <div class="form-group">
+                    <label for="cli-senha">Senha (mín. 8 caracteres)</label>
+                    <input type="password" id="cli-senha" minlength="8" required autocomplete="new-password">
+                </div>
+                <button type="submit" class="btn-primary">CADASTRAR CLIENTE</button>
+            </form>
+
+            <!-- Form Profissional -->
+            <form id="form-profissional" class="form-card" style="display: none;" onsubmit="handleRegister(event, 'profissional')">
+                <h2>Novo Profissional</h2>
+                <div class="form-group">
+                    <label>Nome Completo</label>
+                    <input type="text" id="prof-nome" required>
+                </div>
+                <div class="form-group">
+                    <label>Especialidade</label>
+                    <input type="text" id="prof-especialidade" placeholder="Ex: Cabeleireira, Esteticista" required>
+                </div>
+                <div class="form-group">
+                    <label>Telefone</label>
+                    <input type="tel" id="prof-telef" required>
+                </div>
+                <button type="submit" class="btn-primary">CADASTRAR PROFISSIONAL</button>
+            </form>
+        </main>
+        <footer>© 2026 Studio Nay Lopes</footer>
+    </div>
+    <script src="script.js?v=2"></script>
+</body>
+</html>

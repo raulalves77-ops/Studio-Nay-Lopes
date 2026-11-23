@@ -1,0 +1,7 @@
+# Credenciais do banco — nunca versionar
+config.php
+config.local.php
+
+# Logs e arquivos locais
+*.log
+.freebuff/

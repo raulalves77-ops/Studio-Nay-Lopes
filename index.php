@@ -1,8 +1,11 @@
+
+
+
 <?php
 // Página inicial: só texto fixo e o botão para agendar.
-require 'conexao.php';
+require __DIR__ . '/php/conexao.php';
 $titulo = 'Home';
-require 'topo.php';
+require 'php/topo.php';
 ?>
         <main class="hero-card">
             <div class="hero-content">
@@ -14,4 +17,4 @@ require 'topo.php';
                 <img src="imagens/logo-studio-nay-lopes.png" alt="Studio Nay Lopes" class="hero-img logo-img">
             </div>
         </main>
-<?php require 'rodape.php'; ?>
+<?php require 'php/rodape.php'; ?>

@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Studio Nay Lopes</title>
+    <link rel="stylesheet" href="style.css">
+    <script>
+        (function () {
+            try {
+                var theme = localStorage.getItem('sbd-theme');
+                if (!theme && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) theme = 'dark';
+                if (theme === 'light' || theme === 'dark') document.documentElement.setAttribute('data-theme', theme);
+            } catch (e) {}
+        })();
+    </script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="main-wrapper">
+        <header class="navbar">
+            <div class="logo"><i class="fa-solid fa-spa logo-icon"></i><div class="logo-text"><span>Studio</span><strong>Nay Lopes</strong></div></div>
+            <div class="nav-actions">
+                <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Ativar modo escuro" title="Modo escuro"><i class="fa-solid fa-moon" aria-hidden="true"></i></button>
+                <button type="button" class="nav-toggle" aria-expanded="false" aria-label="Abrir menu" aria-controls="site-navigation"><i class="fa-solid fa-bars" aria-hidden="true"></i></button>
+            </div>
+            <nav class="nav-links" id="site-navigation" aria-label="Navegação principal">
+                <a href="index.html">Home</a>
+                <a href="servicos.html">Serviços</a>
+                <a href="profissionais.html">Profissionais</a>
+                <a href="galeria.html">Galeria</a>
+                <a href="contato.html">Contato</a>
+                <a href="agendar.html">Agendar</a>
+                <a href="meus-agendamentos.html">Meus Agendamentos</a>
+                <a href="minha-conta.html">Minha Conta</a>
+                <a href="cadastro.html">Cadastre-se</a>
+                <a href="login.html" class="active btn-admin-nav"><i class="fa-solid fa-right-to-bracket"></i> Login</a>
+            </nav>
+        </header>
+
+        <main class="registration-container">
+            <!--
+                IMPORTANTE: os dois formularios sao IRMAOS (nivelais dentro do .form-card).
+                Formularios aninhados sao HTML invalido: o parser do navegador ignora a tag
+                <form> interna, fazendo o campo "recuperar-email" (required) passar a fazer
+                parte do formulario de login e a bloquear o submit com "campo obrigatorio".
+            -->
+            <div class="form-card">
+                <form id="login-form" onsubmit="handleLogin(event)">
+                    <h2><i class="fa-solid fa-lock"></i> Acessar Conta</h2>
+                    <div class="form-group">
+                        <label for="login-email">E-mail</label>
+                        <input type="email" id="login-email" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="login-senha">Senha</label>
+                        <input type="password" id="login-senha" required>
+                    </div>
+                    <button type="submit" class="btn-primary">ENTRAR</button>
+                    <p style="margin-top:14px; color: var(--text-secondary); font-size:13px;">
+                        Clientes: use o e-mail e a senha do seu cadastro.<br>
+                        Administração: entre com as credenciais fornecidas.
+                    </p>
+                </form>
+
+                <!-- RF03 - Recuperacao de senha -->
+                <hr style="border:none; border-top:1px solid var(--border-color); margin: 22px 0;">
+
+                <form id="recuperar-senha-form" onsubmit="solicitarRecuperacaoSenha(event)">
+                    <h2 style="font-size:15px;"><i class="fa-solid fa-key"></i> Esqueci minha senha</h2>
+                    <div class="form-group">
+                        <label for="recuperar-email">E-mail cadastrado</label>
+                        <input type="email" id="recuperar-email" placeholder="voce@email.com" required>
+                    </div>
+                    <button type="submit" class="btn-outline">RECUPERAR SENHA</button>
+                </form>
+            </div>
+        </main>
+        <footer>© 2026 Studio Nay Lopes</footer>
+    </div>
+    <script src="script.js?v=2"></script>
+</body>
+</html>

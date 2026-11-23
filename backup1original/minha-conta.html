@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minha Conta - Studio Nay Lopes</title>
+    <link rel="stylesheet" href="style.css">
+    <script>
+        (function () {
+            try {
+                var theme = localStorage.getItem('sbd-theme');
+                if (!theme && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) theme = 'dark';
+                if (theme === 'light' || theme === 'dark') document.documentElement.setAttribute('data-theme', theme);
+            } catch (e) {}
+        })();
+    </script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="main-wrapper">
+        <header class="navbar">
+            <div class="logo"><i class="fa-solid fa-spa logo-icon"></i><div class="logo-text"><span>Studio</span><strong>Nay Lopes</strong></div></div>
+            <div class="nav-actions">
+                <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Ativar modo escuro" title="Modo escuro"><i class="fa-solid fa-moon" aria-hidden="true"></i></button>
+                <button type="button" class="nav-toggle" aria-expanded="false" aria-label="Abrir menu" aria-controls="site-navigation"><i class="fa-solid fa-bars" aria-hidden="true"></i></button>
+            </div>
+            <nav class="nav-links" id="site-navigation" aria-label="NavegaÃ§Ã£o principal">
+                <a href="index.html">Home</a>
+                <a href="servicos.html">ServiÃ§os</a>
+                <a href="profissionais.html">Profissionais</a>
+                <a href="galeria.html">Galeria</a>
+                <a href="contato.html">Contato</a>
+                <a href="agendar.html">Agendar</a>
+                <a href="meus-agendamentos.html">Meus Agendamentos</a>
+                <a href="minha-conta.html" class="active">Minha Conta</a>
+                <a href="login.html" class="btn-admin-nav"><i class="fa-solid fa-right-to-bracket"></i> Login</a>
+            </nav>
+        </header>
+
+        <main class="page-card">
+            <h1><i class="fa-solid fa-user-gear"></i> Minha Conta</h1>
+
+            <!-- RF04 - Dados pessoais -->
+            <div class="db-card">
+                <h3><i class="fa-solid fa-id-card"></i> Dados Pessoais</h3>
+                <p class="form-hint" id="perfil-senha-provisoria" style="display:none;"></p>
+
+                <form onsubmit="handleUpdatePerfil(event)">
+                    <div class="form-group">
+                        <label for="perfil-nome">Nome Completo</label>
+                        <input type="text" id="perfil-nome" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="perfil-email">E-mail (login)</label>
+                        <input type="email" id="perfil-email" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="perfil-telef">Telefone / WhatsApp</label>
+                        <input type="tel" id="perfil-telef" placeholder="(11) 99999-9999" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="perfil-senha">Nova Senha (opcional, mÃ­n. 8 caracteres)</label>
+                        <input type="password" id="perfil-senha" minlength="8" placeholder="Deixe em branco para manter a atual" autocomplete="new-password">
+                    </div>
+                    <button type="submit" class="btn-primary">ATUALIZAR DADOS</button>
+                </form>
+            </div>
+
+            <!-- RF14 - ConfirmaÃ§Ãµes enviadas -->
+            <div class="db-card" style="margin-top: 24px;">
+                <h3><i class="fa-solid fa-envelope-circle-check"></i> ConfirmaÃ§Ãµes de Agendamento</h3>
+                <p class="form-hint">
+                    Ambiente de demonstraÃ§Ã£o: nÃ£o hÃ¡ servidor de e-mail, entÃ£o as confirmaÃ§Ãµes
+                    ficam registradas aqui apÃ³s cada agendamento.
+                </p>
+                <div class="table-responsive">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>ServiÃ§o</th>
+                                <th>Data/HorÃ¡rio</th>
+                                <th>Registrada em</th>
+                            </tr>
+                        </thead>
+                        <tbody id="confirmacoes-body">
+                            <tr><td colspan="4">Nenhuma confirmaÃ§Ã£o registrada.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+
+        <footer>Â© 2026 Studio Nay Lopes</footer>
+    </div>
+    <script src="script.js?v=2"></script>
+</body>
+</html>

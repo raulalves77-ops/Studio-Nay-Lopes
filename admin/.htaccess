@@ -1,0 +1,9 @@
+# Os arquivos desta pasta são "pedaços" incluídos pelo admin.php.
+# Eles nunca devem ser abertos direto pelo navegador (um deles, o
+# acoes.php, processa formulários). Includes do PHP não passam pelo
+# Apache, então bloquear aqui não afeta o painel.
+<FilesMatch "\.php$">
+    Require all denied
+</FilesMatch>
+
+Options -Indexes
